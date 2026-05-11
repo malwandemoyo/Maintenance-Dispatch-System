@@ -16,6 +16,10 @@ class UserRole(models.Model):
     
     def __str__(self):
         return f"{self.user.username} - {self.get_role_display()}"
+    
+    class Meta:
+        verbose_name = 'User Role'
+        verbose_name_plural = 'User Roles'
 
 
 class ResidentProfile(models.Model):
@@ -29,6 +33,10 @@ class ResidentProfile(models.Model):
     
     def __str__(self):
         return f"{self.user.first_name or self.user.username}'s Profile"
+    
+    class Meta:
+        verbose_name = 'Resident Profile'
+        verbose_name_plural = 'Resident Profiles'
 
 
 class Property(models.Model):
@@ -49,6 +57,8 @@ class Property(models.Model):
     
     class Meta:
         ordering = ['-created_at']
+        verbose_name = 'Property'
+        verbose_name_plural = 'Properties'
     
     def __str__(self):
         return self.name
@@ -91,6 +101,8 @@ class MaintenanceTask(models.Model):
     
     class Meta:
         ordering = ['-created_at']
+        verbose_name = 'Maintenance Task'
+        verbose_name_plural = 'Maintenance Tasks'
     
     def __str__(self):
         return f"{self.title} - {self.property.name}"
@@ -106,6 +118,8 @@ class TaskComment(models.Model):
     
     class Meta:
         ordering = ['created_at']
+        verbose_name = 'Task Comment'
+        verbose_name_plural = 'Task Comments'
     
     def __str__(self):
         return f"Comment by {self.author.username} on {self.task.title}"
@@ -130,6 +144,8 @@ class TaskHistory(models.Model):
     
     class Meta:
         ordering = ['-created_at']
+        verbose_name = 'Task History'
+        verbose_name_plural = 'Task History'
     
     def __str__(self):
         return f"{self.task.title} - {self.change_type}"
