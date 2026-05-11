@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 django.setup()
 
 from django.contrib.auth.models import User
-from core.models import UserRole, Property, MaintenanceTask
+from core.models import UserRole, ResidentProfile, Property, MaintenanceTask
 
 
 def create_users():
@@ -97,6 +97,16 @@ def create_users():
         UserRole.objects.get_or_create(
             user=resident_user,
             defaults={'role': 'resident'}
+        )
+        
+        # Create resident profile with contact info
+        ResidentProfile.objects.get_or_create(
+            user=resident_user,
+            defaults={
+                'phone': f'+1-555-010{i}',
+                'address': f'Apt {100+i}, 789 Elm Road, Suburbs',
+                'unit_number': f'{100+i}',
+            }
         )
 
 
