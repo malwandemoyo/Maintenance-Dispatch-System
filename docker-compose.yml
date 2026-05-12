@@ -10,12 +10,19 @@ services:
       POSTGRES_HOST_AUTH_METHOD: ${POSTGRES_HOST_AUTH_METHOD:-md5}
     ports:
       - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   web:
     build: ./backend
-    command: python manage.py runserver 0.0.0.0:8000
+    env_file:
+      - .env.development
     volumes:
       - ./backend:/app
+      - ./backend/logs:/app/logs
     ports:
       - "8000:8000"
     environment:
@@ -25,8 +32,10 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-password}
       DB_HOST: ${DB_HOST:-db}
       DB_PORT: ${DB_PORT:-5432}
+      DJANGO_ENV: ${DJANGO_ENV:-development}
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
 volumes:
   postgres_data:
