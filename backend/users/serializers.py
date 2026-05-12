@@ -48,6 +48,18 @@ class RegisterSerializer(serializers.ModelSerializer):
             'last_name': {'required': False},
         }
     
+    def validate_username(self, value):
+        """Validate username is unique."""
+        if User.objects.filter(username=value).exists():
+            raise serializers.ValidationError("Username already exists.")
+        return value
+    
+    def validate_email(self, value):
+        """Validate email is unique."""
+        if User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("Email already exists.")
+        return value
+    
     def validate(self, attrs):
         if attrs['password'] != attrs['password2']:
             raise serializers.ValidationError(

@@ -109,7 +109,7 @@ class MaintenanceTask(models.Model):
 
 
 class TaskComment(models.Model):
-    """Comments on maintenance tasks for communication between manager and technician."""
+    """Comments on maintenance tasks for communication between manager and maintenance staff."""
     task = models.ForeignKey(MaintenanceTask, on_delete=models.CASCADE, related_name='comments')
     author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='task_comments')
     content = models.TextField()

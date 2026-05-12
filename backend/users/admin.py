@@ -13,7 +13,7 @@ class UserProfileAdmin(admin.ModelAdmin):
             'fields': ('user',)
         }),
         ('Contact', {
-            'fields': ('phone', 'avatar', 'bio')
+            'fields': ('phone', 'bio')
         }),
         ('Notifications', {
             'fields': ('notifications_enabled', 'email_on_task_assigned', 'email_on_task_completed')
