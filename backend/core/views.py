@@ -1,7 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, BasePermission
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import PermissionDenied
 from django.contrib.auth.models import User
 from django.utils import timezone
@@ -12,33 +12,7 @@ from core.serializers import (
     UserSerializer, UserRoleSerializer, PropertySerializer,
     MaintenanceTaskSerializer, TaskCommentSerializer, TaskHistorySerializer
 )
-
-
-class IsManager(BasePermission):
-    """Permission to check if user is a Property Manager."""
-    def has_permission(self, request, view):
-        try:
-            return request.user.is_authenticated and request.user.role.role == 'manager'
-        except UserRole.DoesNotExist:
-            return False
-
-
-class IsMaintenanceStaff(BasePermission):
-    """Permission to check if user is Maintenance Staff."""
-    def has_permission(self, request, view):
-        try:
-            return request.user.is_authenticated and request.user.role.role == 'maintenance_staff'
-        except UserRole.DoesNotExist:
-            return False
-
-
-class IsResident(BasePermission):
-    """Permission to check if user is a Resident."""
-    def has_permission(self, request, view):
-        try:
-            return request.user.is_authenticated and request.user.role.role == 'resident'
-        except UserRole.DoesNotExist:
-            return False
+from core.permissions import IsManager, IsMaintenanceStaff, IsResident
 
 
 class UserViewSet(viewsets.ReadOnlyModelViewSet):

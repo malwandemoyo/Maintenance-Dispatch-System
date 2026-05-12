@@ -1,4 +1,5 @@
 Django
 django-cors-headers
 psycopg2-binary
+django-daisy
 djangorestframework

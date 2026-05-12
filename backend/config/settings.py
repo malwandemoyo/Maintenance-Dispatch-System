@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 import os
+import sys
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -33,6 +34,7 @@ ALLOWED_HOSTS = [host.strip() for host in os.getenv('ALLOWED_HOSTS', '').split('
 
 INSTALLED_APPS = [
     'django.contrib.admin',
+    'django.contrib.humanize',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
@@ -43,6 +45,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'core',
     'users',
+    'notifications',
 ]
 
 MIDDLEWARE = [
@@ -137,6 +140,7 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
+    'EXCEPTION_HANDLER': 'core.exceptions.custom_exception_handler',
 }
 
 # CORS Configuration
@@ -162,3 +166,101 @@ CSRF_TRUSTED_ORIGINS = [
     'http://localhost:8000',
     'http://127.0.0.1:3000',
 ]
+
+# Email Configuration
+# In development: Use LoggingEmailBackend (logs to file + console, no SMTP needed)
+# In production: Use SMTP backend with real credentials
+EMAIL_BACKEND = os.getenv(
+    'EMAIL_BACKEND',
+    'notifications.email_backend.LoggingEmailBackend'
+)
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@maintenanceservices.co.zw')
+EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'true').lower() in ('true', '1')
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+
+# Logging Configuration
+LOGS_DIR = os.path.join(BASE_DIR, 'logs')
+try:
+    os.makedirs(LOGS_DIR, exist_ok=True)
+except (OSError, PermissionError):
+    LOGS_DIR = None  # Disable file logging if permission denied
+
+# Determine if we're running tests
+TESTING = len(sys.argv) > 1 and 'test' in sys.argv
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO' if not TESTING else 'WARNING'),
+        },
+        'notifications': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}
+
+# Add file handlers only if logs directory is accessible
+if LOGS_DIR and not TESTING:
+    LOGGING['handlers']['file'] = {
+        'class': 'logging.handlers.RotatingFileHandler',
+        'filename': os.path.join(LOGS_DIR, 'app.log'),
+        'maxBytes': 1024 * 1024 * 10,  # 10MB
+        'backupCount': 5,
+        'formatter': 'verbose',
+    }
+    LOGGING['handlers']['email_file'] = {
+        'class': 'logging.handlers.RotatingFileHandler',
+        'filename': os.path.join(LOGS_DIR, 'emails.log'),
+        'maxBytes': 1024 * 1024 * 5,  # 5MB
+        'backupCount': 3,
+        'formatter': 'verbose',
+    }
+    LOGGING['loggers']['django']['handlers'].append('file')
+    LOGGING['loggers']['notifications']['handlers'].append('email_file')
+
+
+DAISY_SETTINGS = {
+    # Branding
+    'SITE_TITLE': 'Maintenance Dispatch SuperAdmin',
+    'SITE_HEADER': 'Administration',
+    'INDEX_TITLE': 'Hi, welcome to your dashboard',
+    
+    'LOAD_FULL_STYLES': True,  # Load complete DaisyUI library
+    'SHOW_CHANGELIST_FILTER': True,  # Auto-open filter sidebar
+    'DONT_SUPPORT_ME': True,  # Hide GitHub link
+    
+    # Theme Configuration
+    'DEFAULT_THEME': None,  # e.g., 'corporate', 'dark'
+    'DEFAULT_THEME_DARK': None,  # Dark mode default
+    'SHOW_THEME_SELECTOR': True,  # Show/hide theme dropdown
+    'THEME_LIST': [
+        {'name': 'Light', 'value': 'light'},
+        {'name': 'Dark', 'value': 'dark'},
+
+    ],
+    
+}
