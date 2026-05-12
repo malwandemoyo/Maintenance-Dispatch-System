@@ -22,8 +22,10 @@ from core.views import (
     UserViewSet, UserRoleViewSet, PropertyViewSet,
     MaintenanceTaskViewSet, TaskCommentViewSet, TaskHistoryViewSet
 )
+from users.views import AuthViewSet
 
 router = DefaultRouter()
+router.register(r'auth', AuthViewSet, basename='auth')
 router.register(r'users', UserViewSet, basename='user')
 router.register(r'roles', UserRoleViewSet, basename='role')
 router.register(r'properties', PropertyViewSet, basename='property')
