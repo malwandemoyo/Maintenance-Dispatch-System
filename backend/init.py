@@ -2,6 +2,9 @@
 """
 Initialize script for Maintenance Dispatch System.
 Runs migrations and sets up test users with roles and sample data.
+
+Configuration: See /backend/config/environments.py for environment-specific settings.
+Automatically loads based on DJANGO_ENV environment variable.
 """
 import os
 import sys
@@ -14,123 +17,123 @@ sys.path.insert(0, str(Path(__file__).parent))
 django.setup()
 
 from django.contrib.auth.models import User
-from core.models import UserRole, Property, MaintenanceTask
+from core.models import UserRole, ResidentProfile, Property, MaintenanceTask
+from users.models import UserProfile
+from config.environments import (
+    get_users_config,
+    get_properties_config,
+    get_tasks_config,
+    get_environment,
+    should_create_superuser,
+)
+
+
+def _get_or_create_user(config, role=None):
+    """
+    Generic user creation helper to avoid repetition.
+    
+    Args:
+        config: User configuration dict with username, email, password, etc.
+        role: Optional role to assign ('admin')
+    
+    Returns:
+        User instance and created flag
+    """
+    user, created = User.objects.get_or_create(
+        username=config['username'],
+        defaults={
+            'email': config['email'],
+            'first_name': config['first_name'],
+            'last_name': config['last_name'],
+            'is_staff': role == 'admin',
+            'is_superuser': role == 'admin',
+        }
+    )
+    
+    if created:
+        user.set_password(config['password'])
+        user.save()
+    
+    return user, created
 
 
 def create_users():
-    """Create test users with roles."""
+    """Create test users with roles and profiles."""
     print("Setting up users...")
     
-    # Create Superuser/Admin (no UserRole needed - uses Django's is_superuser)
-    admin_user, created = User.objects.get_or_create(
-        username='admin',
-        defaults={
-            'email': 'admin@example.com',
-            'first_name': 'Admin',
-            'last_name': 'User',
-            'is_staff': True,
-            'is_superuser': True,
-        }
-    )
-    if created:
-        admin_user.set_password('admin123')
-        admin_user.save()
-        print(f"  ✓ Created admin: {admin_user.username}")
+    users_config = get_users_config()
     
-    # Create Property Manager
-    manager_user, created = User.objects.get_or_create(
-        username='manager1',
-        defaults={
-            'email': 'manager1@example.com',
-            'first_name': 'John',
-            'last_name': 'Manager',
-            'is_staff': False,
-        }
-    )
-    if created:
-        manager_user.set_password('manager123')
-        manager_user.save()
-        print(f"  ✓ Created manager: {manager_user.username}")
+    # Admin (superuser)
+    admin_config = users_config.get('admin', {})
+    if admin_config:
+        admin_user, created = _get_or_create_user(admin_config, role='admin')
+        UserProfile.objects.get_or_create(user=admin_user)
+        if created:
+            print(f"  ✓ Created admin: {admin_user.username}")
     
-    UserRole.objects.get_or_create(
-        user=manager_user,
-        defaults={'role': 'manager'}
-    )
+    # Property Manager
+    mgr_config = users_config.get('manager')
+    if mgr_config:
+        mgr_user, created = _get_or_create_user(mgr_config)
+        mgr_profile = UserProfile.objects.get_or_create(user=mgr_user)[0]
+        mgr_profile.phone = mgr_config.get('phone', '')
+        mgr_profile.save()
+        UserRole.objects.get_or_create(user=mgr_user, defaults={'role': 'manager'})
+        if created:
+            print(f"  ✓ Created manager: {mgr_user.username}")
     
-    # Create Maintenance Staff
-    for i in range(1, 3):
-        staff_user, created = User.objects.get_or_create(
-            username=f'staff{i}',
+    # Maintenance Staff
+    staff_list = users_config.get('staff', [])
+    for staff_config in staff_list:
+        user, created = _get_or_create_user(staff_config)
+        profile = UserProfile.objects.get_or_create(user=user)[0]
+        profile.phone = staff_config.get('phone', '')
+        profile.save()
+        UserRole.objects.get_or_create(user=user, defaults={'role': 'maintenance_staff'})
+        if created:
+            print(f"  ✓ Created maintenance staff: {user.username}")
+    
+    # Residents
+    residents_list = users_config.get('residents', [])
+    for resident_config in residents_list:
+        user, created = _get_or_create_user(resident_config)
+        profile = UserProfile.objects.get_or_create(user=user)[0]
+        profile.phone = resident_config.get('phone', '')
+        profile.save()
+        UserRole.objects.get_or_create(user=user, defaults={'role': 'resident'})
+        ResidentProfile.objects.get_or_create(
+            user=user,
             defaults={
-                'email': f'staff{i}@example.com',
-                'first_name': f'Maintenance',
-                'last_name': f'Staff {i}',
-                'is_staff': False,
+                'phone': resident_config.get('phone', ''),
+                'address': resident_config.get('address', ''),
+                'unit_number': resident_config.get('unit_number', ''),
             }
         )
         if created:
-            staff_user.set_password('staff123')
-            staff_user.save()
-            print(f"  ✓ Created maintenance staff: {staff_user.username}")
-        
-        UserRole.objects.get_or_create(
-            user=staff_user,
-            defaults={'role': 'maintenance_staff'}
-        )
-    
-    # Create Residents
-    for i in range(1, 4):
-        resident_user, created = User.objects.get_or_create(
-            username=f'resident{i}',
-            defaults={
-                'email': f'resident{i}@example.com',
-                'first_name': f'Resident',
-                'last_name': f'User {i}',
-                'is_staff': False,
-            }
-        )
-        if created:
-            resident_user.set_password('resident123')
-            resident_user.save()
-            print(f"  ✓ Created resident: {resident_user.username}")
-        
-        UserRole.objects.get_or_create(
-            user=resident_user,
-            defaults={'role': 'resident'}
-        )
+            print(f"  ✓ Created resident: {user.username}")
 
 
 def create_sample_properties():
     """Create sample properties."""
-    print("\nSetting up properties...")
+    print("Setting up properties...")
     
-    manager = User.objects.get(username='manager1')
+    properties_config = get_properties_config()
+    users_config = get_users_config()
     
-    properties_data = [
-        {
-            'name': 'Downtown Office Building',
-            'address': '123 Main St, Downtown',
-            'description': 'Modern office building with 10 floors',
-        },
-        {
-            'name': 'Shopping Center',
-            'address': '456 Market Ave, Commercial District',
-            'description': 'Multi-tenant shopping center',
-        },
-        {
-            'name': 'Residential Complex',
-            'address': '789 Elm Road, Suburbs',
-            'description': 'Apartment complex with 50 units',
-        },
-    ]
+    manager_username = users_config.get('manager', {}).get('username')
+    if not manager_username:
+        print("  ⚠ No manager configured, skipping properties")
+        return
     
-    for prop_data in properties_data:
+    manager = User.objects.get(username=manager_username)
+    
+    for prop_config in properties_config:
         prop, created = Property.objects.get_or_create(
-            name=prop_data['name'],
+            name=prop_config['name'],
             manager=manager,
             defaults={
-                'address': prop_data['address'],
-                'description': prop_data['description'],
+                'address': prop_config['address'],
+                'description': prop_config['description'],
                 'status': 'active',
             }
         )
@@ -139,92 +142,87 @@ def create_sample_properties():
 
 
 def create_sample_tasks():
-    """Create sample maintenance tasks."""
-    print("\nSetting up tasks...")
+    """Create sample maintenance tasks from configuration."""
+    print("Setting up maintenance tasks...")
     
-    manager = User.objects.get(username='manager1')
-    staff1 = User.objects.get(username='staff1')
-    staff2 = User.objects.get(username='staff2')
-    resident1 = User.objects.get(username='resident1')
-    resident2 = User.objects.get(username='resident2')
-    properties = Property.objects.filter(manager=manager)
+    tasks_config = get_tasks_config()
+    users_config = get_users_config()
     
-    tasks_data = [
-        {
-            'property': properties.first(),
-            'title': 'HVAC System Inspection',
-            'description': 'Quarterly inspection of HVAC system on floors 1-5',
-            'priority': 'medium',
-            'status': 'assigned',
-            'assigned_to': staff1,
-            'created_by': manager,
-        },
-        {
-            'property': properties.first(),
-            'title': 'Elevator Maintenance',
-            'description': 'Monthly elevator maintenance and safety check',
-            'priority': 'high',
-            'status': 'pending',
-            'assigned_to': None,
-            'created_by': manager,
-        },
-        {
-            'property': properties.get(name='Shopping Center'),
-            'title': 'Parking Lot Repair',
-            'description': 'Repaint parking lot lines and fix potholes',
-            'priority': 'medium',
-            'status': 'in_progress',
-            'assigned_to': staff2,
-            'created_by': manager,
-        },
-        {
-            'property': properties.get(name='Residential Complex'),
-            'title': 'Roof Leak Investigation',
-            'description': 'Investigate and fix roof leaks in Unit 203',
-            'priority': 'urgent',
-            'status': 'pending',
-            'assigned_to': None,
-            'created_by': manager,
-        },
-        # Resident-created tasks
-        {
-            'property': properties.get(name='Residential Complex'),
-            'title': 'Bathroom Sink Leaking',
-            'description': 'Bathroom sink in apartment 102 is leaking',
-            'priority': 'medium',
-            'status': 'pending',
-            'assigned_to': None,
-            'created_by': resident1,
-        },
-        {
-            'property': properties.get(name='Residential Complex'),
-            'title': 'AC Unit Not Working',
-            'description': 'Air conditioning unit in unit 305 is not working',
-            'priority': 'high',
-            'status': 'pending',
-            'assigned_to': None,
-            'created_by': resident2,
-        },
-    ]
+    manager_username = users_config.get('manager', {}).get('username')
+    if not manager_username:
+        print("  ⚠ No manager configured, skipping tasks")
+        return
     
-    for task_data in tasks_data:
+    manager = User.objects.get(username=manager_username)
+    staff_lookup = {s['username']: User.objects.get(username=s['username']) 
+                    for s in users_config.get('staff', [])}
+    resident_lookup = {r['username']: User.objects.get(username=r['username']) 
+                       for r in users_config.get('residents', [])}
+    property_lookup = {p.name: p for p in Property.objects.all()}
+    
+    for task_config in tasks_config:
+        property_obj = property_lookup.get(task_config['property_name'])
+        if not property_obj:
+            print(f"  ⚠ Skipped task '{task_config['title']}' - property not found")
+            continue
+        
+        # Resolve assigned_to user
+        assigned_to = None
+        if task_config.get('assigned_to'):
+            assigned_to = staff_lookup.get(task_config['assigned_to'])
+        
+        # Resolve created_by user
+        created_by = staff_lookup.get(task_config['created_by']) or \
+                     resident_lookup.get(task_config['created_by']) or manager
+        
         task, created = MaintenanceTask.objects.get_or_create(
-            title=task_data['title'],
-            property=task_data['property'],
+            title=task_config['title'],
+            property=property_obj,
             defaults={
-                'description': task_data['description'],
-                'priority': task_data['priority'],
-                'status': task_data['status'],
-                'assigned_to': task_data['assigned_to'],
-                'created_by': task_data['created_by'],
+                'description': task_config['description'],
+                'priority': task_config['priority'],
+                'status': task_config['status'],
+                'assigned_to': assigned_to,
+                'created_by': created_by,
             }
         )
         if created:
             print(f"  ✓ Created task: {task.title}")
 
 
+def print_summary():
+    """Print initialization summary with test credentials."""
+    print("\n" + "=" * 60)
+    print("Initialization Complete!")
+    print("=" * 60)
+    print(f"\nEnvironment: {get_environment().upper()}")
+    print("\nTest Credentials:")
+    
+    users_config = get_users_config()
+    
+    if users_config.get('admin'):
+        print(f"  Admin: {users_config['admin']['username']}")
+    
+    if users_config.get('manager'):
+        print(f"  Manager: {users_config['manager']['username']}")
+    
+    staff_list = users_config.get('staff', [])
+    if staff_list:
+        staff_names = ', '.join([s['username'] for s in staff_list])
+        print(f"  Maintenance Staff: {staff_names}")
+    
+    residents_list = users_config.get('residents', [])
+    if residents_list:
+        resident_names = ', '.join([r['username'] for r in residents_list])
+        print(f"  Residents: {resident_names}")
+    print("\nAccess:")
+    print("  API: http://localhost:8000/api/")
+    print("  Admin: http://localhost:8000/admin/")
+    print("=" * 60)
+
+
 def main():
-    """Run all initialization steps."""
+    """Main initialization orchestrator."""
     print("=" * 60)
     print("Maintenance Dispatch System - Initialization")
     print("=" * 60)
@@ -236,32 +234,17 @@ def main():
         call_command('migrate', verbosity=0)
         print("  ✓ Migrations completed")
         
-        # Create users
+        # Initialize data
         create_users()
-        
-        # Create sample data
         create_sample_properties()
         create_sample_tasks()
         
-        print("\n" + "=" * 60)
-        print("Initialization Complete!")
-        print("=" * 60)
-        print("\nTest Credentials:")
-        print("  Manager:")
-        print("    Username: manager1")
-        print("    Password: manager123")
-        print("\n  Technicians:")
-        print("    Username: technician1 / technician2")
-        print("    Password: tech123")
-        print("\n  Admin:")
-        print("    Create via: python manage.py createsuperuser")
-        print("\nAPI Access:")
-        print("  http://localhost:8000/api/")
-        print("  http://localhost:8000/admin/")
-        print("=" * 60)
+        print_summary()
         
     except Exception as e:
         print(f"\nError during initialization: {str(e)}")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
 
 

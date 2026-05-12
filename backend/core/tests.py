@@ -231,10 +231,9 @@ class TaskAccessControlTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['count'], 0)
         
-        # Verify staff2 cannot access staff1's task directly
-        self.client.force_authenticate(user=self.staff_user2)
+        # Verify staff2 cannot access staff1's task directly (should get 404 since not in queryset)
         response = self.client.get(f'/api/tasks/{self.task_assigned_to_staff1.id}/')
-        self.assertIn(response.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND])
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
     
     def test_resident_sees_only_own_tasks(self):
         """Test that residents see only tasks they created."""
@@ -251,9 +250,9 @@ class TaskAccessControlTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['count'], 0)
         
-        # Verify resident2 cannot access resident1's task directly
+        # Verify resident2 cannot access resident1's task directly (should get 404 since not in queryset)
         response = self.client.get(f'/api/tasks/{self.task_resident_created.id}/')
-        self.assertIn(response.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND])
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
     
     def test_resident_can_create_task(self):
         """Test that residents can create maintenance requests."""
@@ -368,13 +367,13 @@ class TaskStatusUpdateTestCase(APITestCase):
         
         self.client.force_authenticate(user=other_staff)
         response = self.client.post(f'/api/tasks/{self.task.id}/mark_in_progress/')
-        self.assertIn(response.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND])
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
     
     def test_resident_cannot_update_task_status(self):
         """Test that residents cannot update task status."""
         self.client.force_authenticate(user=self.resident_user)
         response = self.client.post(f'/api/tasks/{self.task.id}/mark_in_progress/')
-        self.assertIn(response.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND])
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 
 class AuthenticationTestCase(APITestCase):

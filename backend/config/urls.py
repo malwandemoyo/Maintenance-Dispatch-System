@@ -22,14 +22,20 @@ from core.views import (
     UserViewSet, UserRoleViewSet, PropertyViewSet,
     MaintenanceTaskViewSet, TaskCommentViewSet, TaskHistoryViewSet
 )
+from users.views import AuthViewSet
+from notifications.views import NotificationPreferenceViewSet, EmailTemplateViewSet, NotificationViewSet
 
 router = DefaultRouter()
+router.register(r'auth', AuthViewSet, basename='auth')
 router.register(r'users', UserViewSet, basename='user')
 router.register(r'roles', UserRoleViewSet, basename='role')
 router.register(r'properties', PropertyViewSet, basename='property')
 router.register(r'tasks', MaintenanceTaskViewSet, basename='task')
 router.register(r'comments', TaskCommentViewSet, basename='comment')
 router.register(r'history', TaskHistoryViewSet, basename='history')
+router.register(r'notification-preferences', NotificationPreferenceViewSet, basename='notification-preference')
+router.register(r'email-templates', EmailTemplateViewSet, basename='email-template')
+router.register(r'notifications', NotificationViewSet, basename='notification')
 
 urlpatterns = [
     path('admin/', admin.site.urls),

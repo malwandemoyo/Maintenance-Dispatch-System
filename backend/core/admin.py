@@ -1,5 +1,5 @@
 from django.contrib import admin
-from core.models import UserRole, Property, MaintenanceTask, TaskComment, TaskHistory
+from core.models import UserRole, ResidentProfile, Property, MaintenanceTask, TaskComment, TaskHistory
 
 
 @admin.register(UserRole)
@@ -7,6 +7,14 @@ class UserRoleAdmin(admin.ModelAdmin):
     list_display = ['user', 'role', 'created_at']
     list_filter = ['role', 'created_at']
     search_fields = ['user__username', 'user__email']
+
+
+@admin.register(ResidentProfile)
+class ResidentProfileAdmin(admin.ModelAdmin):
+    list_display = ['user', 'phone', 'address', 'unit_number']
+    list_filter = ['created_at']
+    search_fields = ['user__username', 'user__email', 'address', 'phone']
+    readonly_fields = ['created_at', 'updated_at']
 
 
 @admin.register(Property)
