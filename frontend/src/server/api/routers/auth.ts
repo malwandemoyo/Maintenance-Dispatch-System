@@ -6,11 +6,23 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export const authRouter = createTRPCRouter({
   login: publicProcedure
-    .input(z.object({ email: z.string().email(), password: z.string().min(1) }))
+    .input(
+      z.object({
+        identifier: z.string().min(1).optional(),
+        email: z.string().min(1).optional(),
+        password: z.string().min(1),
+      })
+    )
     .mutation(async ({ input }) => {
       try {
+        const identifier = input.identifier ?? input.email;
+
+        if (!identifier) {
+          throw new Error("Username/email is required");
+        }
+
         await signIn("credentials", {
-          email: input.email,
+          identifier,
           password: input.password,
           redirect: false,
         });
@@ -25,7 +37,8 @@ export const authRouter = createTRPCRouter({
 
         if (!response.ok) throw new Error("Failed to fetch user");
         
-        const user = await response.json();
+        const userResponse = await response.json();
+        const user = userResponse.user ?? userResponse;
         return { success: true, user };
       } catch (error) {
         throw new Error(error instanceof Error ? error.message : "Login failed");

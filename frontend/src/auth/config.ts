@@ -22,12 +22,14 @@ export const authConfig = {
     CredentialsProvider({
       name: "Credentials",
       credentials: {
-        email: { label: "Email", type: "email" },
+        identifier: { label: "Username or email", type: "text" },
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
-          throw new Error("Email and password required");
+        const identifier = credentials?.identifier ?? credentials?.email;
+
+        if (!identifier || !credentials?.password) {
+          throw new Error("Username/email and password required");
         }
 
         try {
@@ -39,7 +41,7 @@ export const authConfig = {
             },
             credentials: "include", // Include cookies
             body: JSON.stringify({
-              email: credentials.email,
+              identifier,
               password: credentials.password,
             }),
           });
@@ -49,14 +51,15 @@ export const authConfig = {
             throw new Error(error.detail || "Invalid credentials");
           }
 
-          const user = await response.json();
+          const userResponse = await response.json();
+          const user = userResponse.user ?? userResponse;
 
           // Return user object with role information
           return {
-            id: user.id,
+            id: String(user.id),
             email: user.email,
             name: user.first_name || user.username,
-            role: user.role, // 'property_manager', 'maintenance_staff', or 'resident'
+            role: user.role, // 'manager', 'maintenance_staff', or 'resident'
             image: user.avatar || null,
           };
         } catch (error) {

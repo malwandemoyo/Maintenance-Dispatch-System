@@ -5,9 +5,19 @@ import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
+// When running in browser, use localhost; when server-side, use inter-container URL
+const getAPIURL = () => {
+  if (typeof window === 'undefined') {
+    // Server-side
+    return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+  }
+  // Browser-side: always use localhost since backend is exposed on localhost:8000
+  return 'http://localhost:8000';
+};
+
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -18,8 +28,26 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      const API_URL = getAPIURL();
+      const backendResponse = await fetch(`${API_URL}/api/auth/login/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          identifier,
+          password,
+        }),
+      });
+
+      if (!backendResponse.ok) {
+        const backendError = await backendResponse.json().catch(() => null);
+        throw new Error(backendError?.detail ?? 'Invalid credentials');
+      }
+
       const result = await signIn('credentials', {
-        email,
+        identifier,
         password,
         redirect: false,
       });
@@ -31,7 +59,7 @@ export default function LoginPage() {
 
       router.push('/dashboard');
     } catch (err) {
-      setError('An error occurred during login');
+      setError(err instanceof Error ? err.message : 'An error occurred during login');
       console.error(err);
     } finally {
       setLoading(false);
@@ -54,17 +82,18 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                Email Address
+              <label htmlFor="identifier" className="block text-sm font-medium text-gray-700 mb-2">
+                Username or Email
               </label>
               <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="identifier"
+                type="text"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
                 required
+                autoComplete="username"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="you@example.com"
+                placeholder="manager1 or manager@example.com"
               />
             </div>
 
@@ -106,13 +135,13 @@ export default function LoginPage() {
               Demo Credentials:
             </p>
             <p className="text-gray-500 text-xs text-center mt-1">
-              Manager: manager@example.com / password
+              Manager: manager1 or manager@maintenanceservices.co.zw / Manager@123
             </p>
             <p className="text-gray-500 text-xs text-center">
-              Staff: staff@example.com / password
+              Staff: staff1 or staff1@maintenanceservices.co.zw / Staff@123
             </p>
             <p className="text-gray-500 text-xs text-center">
-              Resident: resident@example.com / password
+              Resident: resident1 or resident1@example.com / Resident@123
             </p>
           </div>
         </div>

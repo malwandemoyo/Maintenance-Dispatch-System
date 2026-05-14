@@ -23,14 +23,16 @@ services:
       DEBUG: "true"
       DJANGO_LOG_LEVEL: DEBUG
       PYTHONUNBUFFERED: "1"
+      ALLOWED_HOSTS: "localhost,127.0.0.1,backend"
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      target: development
       args:
         - NODE_ENV=development
-    command: pnpm dev
+    command: sh -lc 'CI=true pnpm install --frozen-lockfile && pnpm dev'
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -39,6 +41,7 @@ services:
       - "3000:3000"
     environment:
       NODE_ENV: development
-      NEXT_PUBLIC_API_URL: http://localhost:8000
+      CI: "true"
+      NEXT_PUBLIC_API_URL: http://backend:8000
       AUTH_TRUST_HOST: "true"
       AUTH_URL: "http://localhost:3000"

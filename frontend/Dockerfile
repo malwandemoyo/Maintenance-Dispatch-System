@@ -74,7 +74,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 # Install dependencies from host volume
 # (will be overridden by docker-compose volume mount)
-COPY pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 
 EXPOSE 3000

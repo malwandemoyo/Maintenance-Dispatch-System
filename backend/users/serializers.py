@@ -5,12 +5,13 @@ from core.models import UserRole, ResidentProfile
 
 
 class UserSerializer(serializers.ModelSerializer):
-    role = serializers.CharField(source='role.get_role_display', read_only=True)
+    role = serializers.CharField(source='role.role', read_only=True)
+    role_display = serializers.CharField(source='role.get_role_display', read_only=True)
     resident_profile = serializers.SerializerMethodField()
     
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'resident_profile']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'role_display', 'resident_profile']
     
     def get_resident_profile(self, obj):
         """Include resident profile if user is a resident."""

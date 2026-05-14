@@ -52,6 +52,9 @@ export function TRPCReactProvider(props: { children: React.ReactNode }) {
         httpBatchStreamLink({
           transformer: SuperJSON,
           url: getBaseUrl() + "/api/trpc",
+          // Ensure cookies (session) are included when the browser makes requests
+          fetch: (input: RequestInfo, init?: RequestInit) =>
+            fetch(input, { ...(init ?? {}), credentials: "include" }),
           headers: () => {
             const headers = new Headers();
             headers.set("x-trpc-source", "nextjs-react");

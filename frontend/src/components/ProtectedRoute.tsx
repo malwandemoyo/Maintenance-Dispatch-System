@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
@@ -14,6 +15,12 @@ export function ProtectedRoute({
   const { data: session, status } = useSession();
   const router = useRouter();
 
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.replace('/login');
+    }
+  }, [router, status]);
+
   if (status === 'loading') {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -22,8 +29,7 @@ export function ProtectedRoute({
     );
   }
 
-  if (!session) {
-    router.push('/login');
+  if (status === 'unauthenticated' || !session) {
     return null;
   }
 

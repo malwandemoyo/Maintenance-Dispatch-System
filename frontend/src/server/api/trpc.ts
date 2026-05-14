@@ -10,7 +10,10 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import { ZodError } from "zod";
 
-import { auth } from "~/server/auth";
+// We'll rely on the Django session as the source of truth for server-side
+// requests. Do not call NextAuth here — instead, attempt to resolve the
+// logged-in user by forwarding the incoming Cookie header to the Django
+// `/api/auth/me/` endpoint.
 
 /**
  * 1. CONTEXT
@@ -25,7 +28,55 @@ import { auth } from "~/server/auth";
  * @see https://trpc.io/docs/server/context
  */
 export const createTRPCContext = async (opts: { headers: Headers }) => {
-  const session = await auth();
+  // Log whether a Cookie header was received (helps debug session forwarding)
+  try {
+    const hasCookie = !!opts.headers?.get("cookie");
+    console.debug(`[tRPC] createTRPCContext - cookie present: ${hasCookie}`);
+  } catch (e) {
+    // ignore logging errors
+  }
+
+  // Build a session object exclusively from the Django session when possible.
+  let session: { user: null | { id: string; name: string | null; email?: string | null; role?: string | null } } = { user: null };
+
+  try {
+    const hasCookie = !!opts.headers?.get("cookie");
+    console.debug(`[tRPC] createTRPCContext - cookie present: ${hasCookie}`);
+    if (hasCookie) {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const cookie = opts.headers.get("cookie") ?? "";
+      try {
+        const res = await fetch(`${API_URL}/api/auth/me/`, {
+          headers: { "Content-Type": "application/json", ...(cookie ? { Cookie: cookie } : {}) },
+        });
+
+        if (res.ok) {
+          const userResp = await res.json().catch(() => null);
+          const user = userResp?.user ?? userResp;
+          if (user) {
+            session = {
+              user: {
+                id: String(user.id),
+                name: user.first_name || user.username || user.email || null,
+                email: user.email ?? null,
+                role: user.role ?? null,
+              },
+            };
+            console.debug('[tRPC] createTRPCContext - populated session.user from Django session');
+          } else {
+            console.debug('[tRPC] createTRPCContext - /api/auth/me/ returned ok but no user payload');
+          }
+        } else {
+          console.debug('[tRPC] createTRPCContext - /api/auth/me/ returned non-ok', res.status);
+        }
+      } catch (e) {
+        console.debug('[tRPC] createTRPCContext - error fetching /api/auth/me/', String(e));
+      }
+    }
+  } catch (e) {
+    // swallow — we don't want a broken auth probe to crash the request pipeline
+    console.debug('[tRPC] createTRPCContext - unexpected error', String(e));
+  }
 
   return {
     session,
