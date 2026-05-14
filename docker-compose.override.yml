@@ -1,0 +1,44 @@
+# Development override - used by default when running 'docker compose up'
+# Provides live reload, verbose logging, and development-friendly configuration
+
+
+services:
+  db:
+    environment:
+      POSTGRES_INITDB_ARGS: "-c log_statement=all -c log_duration=on"
+    ports:
+      - "5432:5432"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - ./backend:/app
+      - ./backend/logs:/app/logs
+    ports:
+      - "8000:8000"
+    environment:
+      DEBUG: "true"
+      DJANGO_LOG_LEVEL: DEBUG
+      PYTHONUNBUFFERED: "1"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - NODE_ENV=development
+    command: pnpm dev
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      AUTH_TRUST_HOST: "true"
+      AUTH_URL: "http://localhost:3000"

@@ -1,0 +1,54 @@
+# Test override - use with: docker compose -f docker-compose.yml -f docker-compose.test.yml up
+# Configured for running tests: separate test database, no health checks blocking, fast startup
+
+version: '3.8'
+
+services:
+  db:
+    environment:
+      POSTGRES_DB: maintenance_test_db
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_password
+    ports:
+      - "5433:5432"  # Different port to avoid conflicts
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: development
+    command: >
+      sh -c "python manage.py migrate --database=test &&
+             python manage.py test --settings=config.settings.test"
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8001:8000"
+    environment:
+      DEBUG: "false"
+      DJANGO_LOG_LEVEL: WARNING
+      PYTHONUNBUFFERED: "1"
+      DATABASE_NAME: maintenance_test_db
+      DATABASE_USER: test_user
+      DATABASE_PASSWORD: test_password
+    depends_on:
+      db:
+        condition: service_started  # Don't wait for health check in tests
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - NODE_ENV=test
+    command: pnpm test
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "3001:3000"
+    environment:
+      NODE_ENV: test
+    depends_on:
+      backend:
+        condition: service_started

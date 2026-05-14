@@ -1,0 +1,40 @@
+# Production override - use with: docker compose -f docker-compose.yml -f docker-compose.prod.yml up
+# Optimized for production: no volumes (except data), hardened security, single replicas
+
+version: '3.8'
+
+services:
+  db:
+    restart: always
+    # Don't expose port in production
+    ports: []
+    environment:
+      POSTGRES_INITDB_ARGS: ""
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: production
+    restart: always
+    command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 4 --worker-class sync --timeout 30
+    volumes: []
+    ports: []
+    environment:
+      DEBUG: "false"
+      DJANGO_LOG_LEVEL: INFO
+      PYTHONUNBUFFERED: "1"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - NODE_ENV=production
+    restart: always
+    command: next start
+    volumes: []
+    ports: []
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${PRODUCTION_API_URL}
