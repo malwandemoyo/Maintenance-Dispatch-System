@@ -67,7 +67,14 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
             console.debug('[tRPC] createTRPCContext - /api/auth/me/ returned ok but no user payload');
           }
         } else {
-          console.debug('[tRPC] createTRPCContext - /api/auth/me/ returned non-ok', res.status);
+          // Improved debug: log trimmed cookie and response body to help diagnose 403
+          try {
+            const text = await res.text().catch(() => '<no-body>');
+            const trimmed = (cookie || '').slice(0, 200) + (cookie && cookie.length > 200 ? '...' : '');
+            console.debug('[tRPC] createTRPCContext - /api/auth/me/ returned non-ok', res.status, 'cookie=', trimmed, 'body=', text);
+          } catch (e) {
+            console.debug('[tRPC] createTRPCContext - /api/auth/me/ returned non-ok', res.status);
+          }
         }
       } catch (e) {
         console.debug('[tRPC] createTRPCContext - error fetching /api/auth/me/', String(e));

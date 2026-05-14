@@ -5,16 +5,6 @@ import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
-// When running in browser, use localhost; when server-side, use inter-container URL
-const getAPIURL = () => {
-  if (typeof window === 'undefined') {
-    // Server-side
-    return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-  }
-  // Browser-side: always use localhost since backend is exposed on localhost:8000
-  return 'http://localhost:8000';
-};
-
 export default function LoginPage() {
   const router = useRouter();
   const [identifier, setIdentifier] = useState('');
@@ -28,17 +18,13 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const API_URL = getAPIURL();
-      const backendResponse = await fetch(`${API_URL}/api/auth/login/`, {
+      // First call the proxied backend route so the browser request is
+      // same-origin and will accept the `Set-Cookie: sessionid` header.
+      const backendResponse = await fetch(`/api/backend/api/auth/login/`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({
-          identifier,
-          password,
-        }),
+        body: JSON.stringify({ identifier, password }),
       });
 
       if (!backendResponse.ok) {
@@ -46,6 +32,7 @@ export default function LoginPage() {
         throw new Error(backendError?.detail ?? 'Invalid credentials');
       }
 
+      // Then call NextAuth signIn to create/refresh the NextAuth session (JWT)
       const result = await signIn('credentials', {
         identifier,
         password,
