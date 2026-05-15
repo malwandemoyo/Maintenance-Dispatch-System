@@ -52,7 +52,7 @@ export default function DashboardPage() {
             </Link>
 
             {/* Properties Card */}
-            {session?.user?.role === 'property_manager' && (
+            {session?.user?.role === 'manager' && (
               <Link href="/properties">
                 <div className="bg-white overflow-hidden shadow rounded-lg hover:shadow-lg transition-shadow cursor-pointer h-full">
                   <div className="px-4 py-5 sm:p-6">
@@ -112,7 +112,7 @@ export default function DashboardPage() {
               <p className="text-sm text-green-800 mb-3 capitalize">
                 <strong>{session?.user?.role?.replace('_', ' ')}</strong>
               </p>
-              {session?.user?.role === 'property_manager' && (
+              {session?.user?.role === 'manager' && (
                 <ul className="space-y-1 text-sm text-green-800">
                   <li>✓ View all maintenance requests</li>
                   <li>✓ Assign tasks to maintenance staff</li>

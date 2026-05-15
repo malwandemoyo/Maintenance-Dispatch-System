@@ -1,69 +1,114 @@
-import Link from "next/link";
+'use client';
 
-import { LatestPost } from "~/app/_components/post";
-import { auth } from "~/server/auth";
-import { api, HydrateClient } from "~/trpc/server";
+import { useSession } from 'next-auth/react';
+import Link from 'next/link';
+import { ProtectedRoute } from '~/components/ProtectedRoute';
+import { api } from '~/trpc/react';
+import { LoadingSpinner } from '~/components/LoadingSpinner';
 
-export default async function Home() {
-  const hello = await api.post.hello({ text: "from tRPC" });
-  const session = await auth();
+export default function Dashboard() {
+  const { data: session } = useSession();
+  const { data: response, isLoading } = api.tasks.list.useQuery({
+    status: 'open',
+  });
 
-  if (session?.user) {
-    void api.post.getLatest.prefetch();
-  }
+  const tasks = response?.data ?? [];
 
   return (
-    <HydrateClient>
-      <main className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-[#2e026d] to-[#15162c] text-white">
-        <div className="container flex flex-col items-center justify-center gap-12 px-4 py-16">
-          <h1 className="text-5xl font-extrabold tracking-tight sm:text-[5rem]">
-            Create <span className="text-[hsl(280,100%,70%)]">T3</span> App
-          </h1>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-8">
-            <Link
-              className="flex max-w-xs flex-col gap-4 rounded-xl bg-white/10 p-4 hover:bg-white/20"
-              href="https://create.t3.gg/en/usage/first-steps"
-              target="_blank"
-            >
-              <h3 className="text-2xl font-bold">First Steps →</h3>
-              <div className="text-lg">
-                Just the basics - Everything you need to know to set up your
-                database and authentication.
-              </div>
-            </Link>
-            <Link
-              className="flex max-w-xs flex-col gap-4 rounded-xl bg-white/10 p-4 hover:bg-white/20"
-              href="https://create.t3.gg/en/introduction"
-              target="_blank"
-            >
-              <h3 className="text-2xl font-bold">Documentation →</h3>
-              <div className="text-lg">
-                Learn more about Create T3 App, the libraries it uses, and how
-                to deploy it.
-              </div>
-            </Link>
+    <ProtectedRoute>
+      <div className="min-h-screen bg-gray-50 px-4 sm:px-6 lg:px-8 py-12">
+        <div className="max-w-7xl mx-auto">
+          {/* Header */}
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-gray-900">Maintenance</h1>
+            <p className="text-gray-600 mt-2">Welcome back, {session?.user?.name || 'User'}!</p>
+            {session?.user?.role === 'resident' && (
+              <p className="text-sm text-gray-500 mt-1">Use <Link href="/report-fault" className="text-blue-600">Report Fault</Link> to create a new issue.</p>
+            )}
           </div>
-          <div className="flex flex-col items-center gap-2">
-            <p className="text-2xl text-white">
-              {hello ? hello.greeting : "Loading tRPC query..."}
-            </p>
 
-            <div className="flex flex-col items-center justify-center gap-4">
-              <p className="text-center text-2xl text-white">
-                {session && <span>Logged in as {session.user?.name}</span>}
-              </p>
-              <Link
-                href={session ? "/api/auth/signout" : "/api/auth/signin"}
-                className="rounded-full bg-white/10 px-10 py-3 font-semibold no-underline transition hover:bg-white/20"
-              >
-                {session ? "Sign out" : "Sign in"}
+          {/* Tasks Table */}
+          {isLoading ? (
+            <div className="flex justify-center py-12">
+              <LoadingSpinner />
+            </div>
+          ) : tasks.length > 0 ? (
+            <div className="bg-white rounded-lg shadow overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Task</th>
+                      {!session || session.user.role !== 'resident' ? (
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Priority</th>
+                      ) : null}
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Assigned To</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{session && session.user.role === 'resident' ? 'Location' : 'Property'}</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {tasks.map((task: any) => (
+                      <tr key={task.id} className="hover:bg-gray-50 transition">
+                        <td className="px-6 py-4">
+                          <p className="font-medium text-gray-900">{task.title}</p>
+                          <p className="text-sm text-gray-600">{task.property_details?.name || task.property?.name || ''}</p>
+                        </td>
+                        {(!session || session.user.role !== 'resident') && (
+                          <td className="px-6 py-4">
+                            <span
+                              className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${
+                                task.priority === 'high'
+                                  ? 'bg-red-100 text-red-800'
+                                  : task.priority === 'medium'
+                                    ? 'bg-yellow-100 text-yellow-800'
+                                    : 'bg-green-100 text-green-800'
+                              }`}
+                            >
+                              {task.priority}
+                            </span>
+                          </td>
+                        )}
+                        <td className="px-6 py-4">
+                          <span className="text-sm text-gray-700">
+                            {task.assigned_to_details
+                              ? `${task.assigned_to_details.first_name || task.assigned_to_details.username || ''} ${task.assigned_to_details.last_name || ''}` + (task.assigned_to_details.staff_profile?.role_title ? ` - ${task.assigned_to_details.staff_profile.role_title}` : '')
+                              : 'Unassigned'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className="text-sm text-gray-600">{task.property_details?.address || ''}</p>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="inline-flex px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+                            {task.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <Link
+                            href={`/tasks/${task.id}`}
+                            className="text-blue-600 hover:text-blue-700 font-medium text-sm"
+                          >
+                            View →
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white rounded-lg shadow p-12 text-center">
+              <p className="text-gray-600 text-lg">No open tasks at the moment</p>
+              <Link href="/tasks/new" className="mt-4 inline-block text-blue-600 hover:text-blue-700 font-medium">
+                Create a new task
               </Link>
             </div>
-          </div>
-
-          {session?.user && <LatestPost />}
+          )}
         </div>
-      </main>
-    </HydrateClient>
+      </div>
+    </ProtectedRoute>
   );
 }

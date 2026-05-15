@@ -20,7 +20,7 @@ export default function LoginPage() {
     try {
       // First call the proxied backend route so the browser request is
       // same-origin and will accept the `Set-Cookie: sessionid` header.
-      const backendResponse = await fetch(`/api/backend/api/auth/login/`, {
+      const backendResponse = await fetch('/api/backend/api/auth/login/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

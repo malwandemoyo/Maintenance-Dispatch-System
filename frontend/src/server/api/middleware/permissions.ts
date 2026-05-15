@@ -38,7 +38,7 @@ export function requireRole(...allowedRoles: string[]) {
  * Validate user is property manager
  */
 export function requirePropertyManager() {
-  return requireRole('property_manager');
+  return requireRole('manager');
 }
 
 /**

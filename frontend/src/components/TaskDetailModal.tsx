@@ -11,6 +11,12 @@ interface Task {
   priority: string;
   property: string;
   assignedToName?: string;
+  assigned_to_details?: {
+    first_name?: string;
+    last_name?: string;
+    username?: string;
+    staff_profile?: { role_title?: string } | null;
+  } | null;
 }
 
 interface TaskDetailModalProps {
@@ -74,7 +80,9 @@ export function TaskDetailModal({ isOpen, onClose, task }: TaskDetailModalProps)
                   <div>
                     <h4 className="text-sm font-medium text-gray-500">Assigned To</h4>
                     <p className="mt-1 text-sm text-gray-900">
-                      {task.assignedToName || 'Unassigned'}
+                      {task.assigned_to_details
+                        ? `${task.assigned_to_details.first_name || task.assigned_to_details.username || ''} ${task.assigned_to_details.last_name || ''}` + (task.assigned_to_details.staff_profile?.role_title ? ` - ${task.assigned_to_details.staff_profile.role_title}` : '')
+                        : task.assignedToName || 'Unassigned'}
                     </p>
                   </div>
                 </div>

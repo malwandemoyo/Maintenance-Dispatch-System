@@ -12,21 +12,43 @@ async function proxyRequest(
     const { path = [] } = await params;
     
     // Reconstruct the full path from the catch-all array
-    // The original request was /api/backend/api/auth/login/
-    // path array will be ['api', 'auth', 'login'] (trailing slash not included)
-    // Check the original nextUrl to see if it had a trailing slash
-    const originalPathname = req.nextUrl.pathname; // e.g., /api/backend/api/auth/login/
-    const hasTrailingSlash = originalPathname.endsWith('/');
+    // Check the raw request URL (from referer or reconstruct from nextUrl)
+    // Use the nextUrl.href which is the full URL including search
+    const nextUrlStr = req.nextUrl.href;
+    const backendPrefix = '/api/backend';
+    const backendPrefixIndex = nextUrlStr.indexOf(backendPrefix);
     
-    let pathname = '/' + path.join('/');
-    if (hasTrailingSlash && !pathname.endsWith('/')) {
+    let pathname: string;
+    let search: string;
+    
+    if (backendPrefixIndex !== -1) {
+      // Extract everything after /api/backend from the full URL
+      const afterPrefix = nextUrlStr.substring(backendPrefixIndex + backendPrefix.length);
+      const queryIndex = afterPrefix.indexOf('?');
+      if (queryIndex !== -1) {
+        pathname = afterPrefix.substring(0, queryIndex);
+        search = afterPrefix.substring(queryIndex);
+      } else {
+        pathname = afterPrefix;
+        search = '';
+      }
+    } else {
+      // Fallback: reconstruct from path array
+      pathname = '/' + path.join('/');
+      search = req.nextUrl.search;
+    }
+    
+    // Ensure pathname is at least /
+    if (!pathname) pathname = '/';
+    
+    // Django requires trailing slashes for API endpoints
+    if (!pathname.endsWith('/') && pathname.startsWith('/api/')) {
       pathname += '/';
     }
     
-    const search = req.nextUrl.search;
     const fullUrl = `${BACKEND}${pathname}${search}`;
 
-    console.debug(`[proxy] ${req.method} ${fullUrl} (path array: ${JSON.stringify(path)}, trailing slash: ${hasTrailingSlash})`);
+    console.debug(`[proxy] ${req.method} ${fullUrl}`);
 
     // Build headers, forwarding most from the request
     const headers = new Headers();

@@ -6,15 +6,38 @@ import { ProtectedRoute } from '~/components/ProtectedRoute';
 import { api } from '~/trpc/react';
 import Link from 'next/link';
 
+function formatStaffName(member?: {
+  first_name?: string;
+  last_name?: string;
+  username?: string;
+}) {
+  if (!member) return 'Unassigned';
+
+  const fullName = [member.first_name, member.last_name].filter(Boolean).join(' ').trim();
+  return fullName || member.username || 'Unassigned';
+}
+
 export default function TasksPage() {
   const { data: session } = useSession();
-  const [status, setStatus] = useState<string | undefined>();
+  const [tab, setTab] = useState<'open' | 'done' | 'deleted'>('open');
   const [priority, setPriority] = useState<string | undefined>();
 
   const { data: tasksData, isLoading } = api.tasks.list.useQuery({
-    status: status as any,
+    status: tab,
     priority: priority as any,
   });
+
+  const isManager = session?.user?.role === 'manager';
+  const visibleTabs = isManager
+    ? [
+        { key: 'open', label: 'New Tasks' },
+        { key: 'done', label: 'Done Tasks' },
+        { key: 'deleted', label: 'Deleted Tasks' },
+      ]
+    : [
+        { key: 'open', label: 'New Tasks' },
+        { key: 'done', label: 'Done Tasks' },
+      ];
 
   return (
     <ProtectedRoute>
@@ -24,12 +47,12 @@ export default function TasksPage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div className="flex justify-between items-center">
               <h1 className="text-3xl font-bold text-gray-900">Tasks</h1>
-              {session?.user?.role === 'resident' && (
+              {isManager && (
                 <Link
                   href="/tasks/new"
                   className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg"
                 >
-                  Create Task
+                  Add Task
                 </Link>
               )}
             </div>
@@ -38,6 +61,24 @@ export default function TasksPage() {
 
         {/* Main Content */}
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          {/* Tabs */}
+          <div className="flex flex-wrap gap-2 mb-6">
+            {visibleTabs.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => setTab(item.key as 'open' | 'done' | 'deleted')}
+                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                  tab === item.key
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+
           {/* Filters */}
           <div className="bg-white rounded-lg shadow p-6 mb-8">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -46,16 +87,13 @@ export default function TasksPage() {
                   Status
                 </label>
                 <select
-                  value={status || ''}
-                  onChange={(e) => setStatus(e.target.value || undefined)}
+                  value={tab}
+                  onChange={(e) => setTab(e.target.value as 'open' | 'done' | 'deleted')}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                 >
-                  <option value="">All</option>
-                  <option value="pending">Pending</option>
-                  <option value="assigned">Assigned</option>
-                  <option value="in_progress">In Progress</option>
-                  <option value="completed">Completed</option>
-                  <option value="cancelled">Cancelled</option>
+                  <option value="open">New</option>
+                  <option value="done">Done</option>
+                  {isManager && <option value="deleted">Deleted</option>}
                 </select>
               </div>
 
@@ -99,6 +137,7 @@ export default function TasksPage() {
                               task.status === 'completed' ? 'bg-green-100 text-green-800' :
                               task.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
                               task.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                              task.status === 'cancelled' ? 'bg-red-100 text-red-800' :
                               'bg-gray-100 text-gray-800'
                             }`}>
                               {task.status}
@@ -120,7 +159,7 @@ export default function TasksPage() {
                         )}
                         <div className="flex justify-between text-sm text-gray-500">
                           <span>Property: {task.property}</span>
-                          <span>Assigned to: {task.assigned_to_name || 'Unassigned'}</span>
+                          <span>Assigned to: {formatStaffName(task.assigned_to_details)}</span>
                         </div>
                       </div>
                     </div>
@@ -128,7 +167,7 @@ export default function TasksPage() {
                 ))
               ) : (
                 <div className="text-center py-12">
-                  <p className="text-gray-500 text-lg">No tasks found</p>
+                  <p className="text-gray-500 text-lg">No tasks found in this tab</p>
                 </div>
               )}
             </div>

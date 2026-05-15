@@ -6,6 +6,7 @@ import { SessionProvider } from "next-auth/react";
 
 import { TRPCReactProvider } from "~/trpc/react";
 import { auth } from "~/auth";
+import { Navbar } from "~/components/Navbar";
 
 export const metadata: Metadata = {
   title: "Maintenance Dispatch System",
@@ -27,7 +28,10 @@ export default async function RootLayout({
     <html lang="en" className={`${geist.variable}`}>
       <body>
         <SessionProvider session={session}>
-          <TRPCReactProvider>{children}</TRPCReactProvider>
+          <TRPCReactProvider>
+            {session?.user && <Navbar />}
+            {children}
+          </TRPCReactProvider>
         </SessionProvider>
       </body>
     </html>

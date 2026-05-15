@@ -3,15 +3,34 @@
 import { useSession } from 'next-auth/react';
 import { useState } from 'react';
 import { useParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { ProtectedRoute } from '~/components/ProtectedRoute';
 import { api } from '~/trpc/react';
 import Link from 'next/link';
 
+function formatStaffName(member?: {
+  first_name?: string;
+  last_name?: string;
+  username?: string;
+}) {
+  if (!member) return 'Unassigned';
+
+  const fullName = [member.first_name, member.last_name].filter(Boolean).join(' ').trim();
+  return fullName || member.username || 'Unassigned';
+}
+
 export default function TaskDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const taskId = parseInt(params.id as string);
   const { data: session } = useSession();
+  const utils = api.useUtils();
   const [comment, setComment] = useState('');
+  const [selectedStaffId, setSelectedStaffId] = useState<string>('');
+  const [assignmentMessage, setAssignmentMessage] = useState('');
+  const [assignedStaffLabel, setAssignedStaffLabel] = useState('');
+  const [actionMessage, setActionMessage] = useState('');
+  const [activeAction, setActiveAction] = useState<'progress' | 'completed' | null>(null);
 
   const { data: task, isLoading } = api.tasks.get.useQuery({ id: taskId });
   const { data: comments } = api.comments.list.useQuery({ task_id: taskId });
@@ -21,24 +40,67 @@ export default function TaskDetailPage() {
   const updateStatusMutation = api.tasks.markInProgress.useMutation();
   const completeMutation = api.tasks.markCompleted.useMutation();
   const commentMutation = api.comments.create.useMutation();
+  const deleteMutation = api.tasks.delete.useMutation();
 
-  const handleAssign = async (staffId: number) => {
+  const maintenanceStaff = Array.isArray(staff) ? staff : staff?.results ?? [];
+  const selectedStaff = maintenanceStaff.find((member: any) => String(member.id) === selectedStaffId);
+  const assignedToLabel =
+    assignedStaffLabel ||
+    formatStaffName(task?.assigned_to_details) ||
+    task?.assigned_to_name ||
+    'Unassigned';
+
+  const handleAssign = async () => {
+    if (!selectedStaffId) return;
     try {
-      await assignMutation.mutateAsync({ task_id: taskId, staff_id: staffId });
+      const updatedTask = await assignMutation.mutateAsync({ task_id: taskId, staff_id: parseInt(selectedStaffId) });
+      const staffLabel =
+        formatStaffName(updatedTask?.assigned_to_details) ||
+        formatStaffName(selectedStaff) ||
+        'Assigned';
+      setAssignedStaffLabel(staffLabel);
+      await utils.tasks.get.invalidate({ id: taskId });
+      await utils.tasks.list.invalidate();
+      await utils.users.getMaintenanceStaff.invalidate();
+      setAssignmentMessage('Task assigned successfully');
+      setSelectedStaffId('');
     } catch (error) {
       console.error('Failed to assign task:', error);
     }
   };
 
+  const handleDelete = async () => {
+    try {
+      await deleteMutation.mutateAsync({ id: taskId });
+      await utils.tasks.list.invalidate();
+      window.location.href = '/tasks';
+      setAssignmentMessage('Task deleted successfully');
+    } catch (error) {
+      console.error('Failed to delete task:', error);
+    }
+  };
+
   const handleStatusUpdate = async (action: 'progress' | 'completed') => {
+    setActiveAction(action);
+    setActionMessage('');
+
     try {
       if (action === 'progress') {
         await updateStatusMutation.mutateAsync({ id: taskId });
+        setActionMessage('Work started successfully');
+        await utils.tasks.get.invalidate({ id: taskId });
+        await utils.tasks.list.invalidate();
       } else {
         await completeMutation.mutateAsync({ id: taskId });
+        await utils.tasks.get.invalidate({ id: taskId });
+        await utils.tasks.list.invalidate();
+        router.push('/tasks');
       }
     } catch (error) {
       console.error('Failed to update status:', error);
+      setActionMessage(action === 'progress' ? 'Could not start work' : 'Could not complete task');
+    } finally {
+      setActiveAction(null);
     }
   };
 
@@ -117,29 +179,50 @@ export default function TaskDetailPage() {
                   <div>
                     <p className="text-sm text-gray-600">Assigned to</p>
                     <p className="text-lg font-semibold text-gray-900">
-                      {task.assigned_to_name || 'Unassigned'}
+                      {assignedToLabel}
                     </p>
                   </div>
                 </div>
 
                 {/* Status Actions */}
                 {session?.user?.role === 'maintenance_staff' && task.status !== 'completed' && (
-                  <div className="flex gap-2">
-                    {task.status === 'assigned' && (
-                      <button
-                        onClick={() => handleStatusUpdate('progress')}
-                        className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg"
-                      >
-                        Start Work
-                      </button>
+                  <div className="space-y-3">
+                    {actionMessage && (
+                      <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                        {actionMessage}
+                      </div>
                     )}
+
+                    {task.status === 'assigned' && (
+                      <div className="rounded-lg border border-blue-100 bg-blue-50 p-4">
+                        <p className="text-sm font-medium text-blue-900 mb-3">Ready to begin?</p>
+                        <p className="text-sm text-blue-800 mb-4">
+                          Start work to move this task into progress and let the team know you’ve begun.
+                        </p>
+                        <button
+                          onClick={() => handleStatusUpdate('progress')}
+                          disabled={activeAction === 'progress' || updateStatusMutation.isPending}
+                          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+                        >
+                          {activeAction === 'progress' || updateStatusMutation.isPending ? 'Starting…' : 'Start Work'}
+                        </button>
+                      </div>
+                    )}
+
                     {task.status === 'in_progress' && (
-                      <button
-                        onClick={() => handleStatusUpdate('completed')}
-                        className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg"
-                      >
-                        Mark Completed
-                      </button>
+                      <div className="rounded-lg border border-green-100 bg-green-50 p-4">
+                        <p className="text-sm font-medium text-green-900 mb-3">Work in progress</p>
+                        <p className="text-sm text-green-800 mb-4">
+                          Once the task is finished, mark it completed to return to the task list.
+                        </p>
+                        <button
+                          onClick={() => handleStatusUpdate('completed')}
+                          disabled={activeAction === 'completed' || completeMutation.isPending}
+                          className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 font-semibold text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+                        >
+                          {activeAction === 'completed' || completeMutation.isPending ? 'Completing…' : 'Mark Completed'}
+                        </button>
+                      </div>
                     )}
                   </div>
                 )}
@@ -187,21 +270,61 @@ export default function TaskDetailPage() {
 
             {/* Sidebar */}
             <div>
-              {session?.user?.role === 'property_manager' && task.status === 'pending' && (
+              {session?.user?.role === 'manager' && task.status === 'pending' && (
                 <div className="bg-white rounded-lg shadow p-6">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Assign Task</h3>
-                  <select
-                    onChange={(e) => handleAssign(parseInt(e.target.value))}
-                    defaultValue=""
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-blue-500 mb-4"
+                    {assignmentMessage && (
+                      <div className="mb-4 rounded-lg bg-green-50 border border-green-200 p-3 text-sm text-green-800">
+                        <div className="flex items-center justify-between gap-3">
+                          <span>{assignmentMessage}</span>
+                          <button
+                            type="button"
+                            onClick={() => setAssignmentMessage('')}
+                            className="px-3 py-1 rounded-md bg-green-600 text-white text-xs font-semibold hover:bg-green-700"
+                          >
+                            OK
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    <select
+                      value={selectedStaffId}
+                      onChange={(e) => setSelectedStaffId(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-blue-500 mb-4"
+                    >
+                      <option value="">Select staff member...</option>
+                      {maintenanceStaff.map((s: any) => {
+                        const fullName = [s.first_name, s.last_name].filter(Boolean).join(' ').trim();
+                        const label = fullName || s.username || s.email;
+
+                        return (
+                          <option key={s.id} value={s.id}>
+                            {label}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={handleAssign}
+                      disabled={!selectedStaffId || assignMutation.isPending}
+                      className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-2 px-4 rounded-lg"
+                    >
+                      {assignMutation.isPending ? 'Assigning...' : 'Assign'}
+                    </button>
+                </div>
+              )}
+
+              {session?.user?.role === 'manager' && (
+                <div className="mt-4 bg-white rounded-lg shadow p-6">
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    disabled={deleteMutation.isPending}
+                    className="w-full bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white font-semibold py-2 px-4 rounded-lg"
                   >
-                    <option value="">Select staff member...</option>
-                    {staff?.results?.map((s: any) => (
-                      <option key={s.id} value={s.id}>
-                        {s.first_name} {s.last_name}
-                      </option>
-                    ))}
-                  </select>
+                    {deleteMutation.isPending ? 'Deleting...' : 'Delete Task'}
+                  </button>
                 </div>
               )}
             </div>

@@ -1,5 +1,6 @@
 from django.contrib import admin
 from core.models import UserRole, ResidentProfile, Property, MaintenanceTask, TaskComment, TaskHistory
+from core.models import StaffProfile
 
 
 @admin.register(UserRole)
@@ -11,9 +12,17 @@ class UserRoleAdmin(admin.ModelAdmin):
 
 @admin.register(ResidentProfile)
 class ResidentProfileAdmin(admin.ModelAdmin):
-    list_display = ['user', 'phone', 'address', 'unit_number']
+    list_display = ['user', 'phone', 'address', 'unit_number', 'property']
     list_filter = ['created_at']
-    search_fields = ['user__username', 'user__email', 'address', 'phone']
+    search_fields = ['user__username', 'user__email', 'address', 'phone', 'property__name']
+    readonly_fields = ['created_at', 'updated_at']
+
+
+@admin.register(StaffProfile)
+class StaffProfileAdmin(admin.ModelAdmin):
+    list_display = ['user', 'role_title', 'phone', 'created_at']
+    list_filter = ['created_at']
+    search_fields = ['user__username', 'user__email', 'role_title']
     readonly_fields = ['created_at', 'updated_at']
 
 
@@ -33,7 +42,7 @@ class MaintenanceTaskAdmin(admin.ModelAdmin):
     readonly_fields = ['created_at', 'updated_at', 'completed_at']
     fieldsets = (
         ('Task Info', {
-            'fields': ('property', 'title', 'description', 'priority', 'due_date')
+            'fields': ('property', 'title', 'description', 'priority', 'due_date', 'photo')
         }),
         ('Status', {
             'fields': ('status', 'assigned_to', 'completion_notes', 'completed_at')

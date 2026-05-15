@@ -17,11 +17,20 @@ class UserSerializer(serializers.ModelSerializer):
         """Include resident profile if user is a resident."""
         try:
             if obj.role.role == 'resident' and hasattr(obj, 'resident_profile'):
-                return {
-                    'phone': obj.resident_profile.phone,
-                    'address': obj.resident_profile.address,
-                    'unit_number': obj.resident_profile.unit_number,
+                profile = obj.resident_profile
+                data = {
+                    'phone': profile.phone,
+                    'address': profile.address,
+                    'unit_number': profile.unit_number,
                 }
+                if hasattr(profile, 'property') and profile.property:
+                    data['property'] = profile.property.id
+                    data['property_details'] = {
+                        'id': profile.property.id,
+                        'name': profile.property.name,
+                        'address': profile.property.address,
+                    }
+                return data
         except (UserRole.DoesNotExist, ResidentProfile.DoesNotExist):
             pass
         return None
@@ -64,7 +73,7 @@ class RegisterSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         if attrs['password'] != attrs['password2']:
             raise serializers.ValidationError(
-                {'password': "Password fields didn't match."}
+                "The two password fields didn't match."
             )
         return attrs
     
@@ -101,7 +110,7 @@ class ChangePasswordSerializer(serializers.Serializer):
     def validate(self, attrs):
         if attrs['new_password'] != attrs['new_password2']:
             raise serializers.ValidationError(
-                {'new_password': "Password fields didn't match."}
+                "The two password fields didn't match."
             )
         return attrs
     
@@ -109,7 +118,7 @@ class ChangePasswordSerializer(serializers.Serializer):
         user = self.context['request'].user
         if not user.check_password(value):
             raise serializers.ValidationError(
-                {'old_password': "Old password is incorrect."}
+                "Old password is incorrect."
             )
         return value
     

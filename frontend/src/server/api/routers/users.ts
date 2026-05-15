@@ -8,7 +8,7 @@ export const usersRouter = createTRPCRouter({
   list: protectedProcedure
     .input(
       z.object({
-        role: z.enum(["property_manager", "maintenance_staff", "resident"]).optional(),
+        role: z.enum(["manager", "maintenance_staff", "resident"]).optional(),
         page: z.number().default(1),
         limit: z.number().default(20),
       })
@@ -43,15 +43,10 @@ export const usersRouter = createTRPCRouter({
     )
     .query(async ({ input, ctx }) => {
       try {
-        const params = new URLSearchParams({
-          page: input.page.toString(),
-          limit: input.limit.toString(),
-          role: "maintenance_staff",
-        });
         const cookie = ctx.headers?.get("cookie") ?? "";
         console.debug(`[tRPC/users.getMaintenanceStaff] forwarding cookie present=${!!cookie} value="${cookie.substring(0, 40)}..."`);
 
-        const response = await fetch(`${API_URL}/api/users/?${params}`, {
+        const response = await fetch(`${API_URL}/api/users/maintenance_staff/`, {
           headers: { "Content-Type": "application/json", ...(cookie ? { Cookie: cookie } : {}) },
         });
 

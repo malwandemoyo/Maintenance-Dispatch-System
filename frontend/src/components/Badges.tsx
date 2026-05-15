@@ -63,7 +63,7 @@ interface RoleBadgeProps {
 export function RoleBadge({ role }: RoleBadgeProps) {
   const getRoleColor = (role: string) => {
     switch (role) {
-      case 'property_manager':
+      case 'manager':
         return 'bg-purple-100 text-purple-800';
       case 'maintenance_staff':
         return 'bg-blue-100 text-blue-800';

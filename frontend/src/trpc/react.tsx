@@ -45,9 +45,19 @@ export function TRPCReactProvider(props: { children: React.ReactNode }) {
     api.createClient({
       links: [
         loggerLink({
-          enabled: (op) =>
-            process.env.NODE_ENV === "development" ||
-            (op.direction === "down" && op.result instanceof Error),
+          enabled: (op) => {
+            // Log everything in dev except:
+            // - errors that are being handled (mutations with onError callbacks)
+            // - successful responses
+            if (process.env.NODE_ENV !== "development") {
+              return op.direction === "down" && op.result instanceof Error;
+            }
+            // In dev, only log errors that aren't being handled
+            if (op.direction === "down" && op.result instanceof Error) {
+              return false; // Don't log mutation errors - they're handled in the UI
+            }
+            return true;
+          },
         }),
         httpBatchStreamLink({
           transformer: SuperJSON,

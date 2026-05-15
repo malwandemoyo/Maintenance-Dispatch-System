@@ -4,6 +4,27 @@ import { requirePropertyManager } from "~/server/api/middleware/permissions";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+// Helper function to extract CSRF token from cookie
+function extractCSRFToken(cookie: string): string {
+  if (!cookie) return "";
+  const parts = cookie.split(";").map((c) => c.trim());
+  for (const p of parts) {
+    if (p.startsWith("csrftoken=")) {
+      return p.split("=")[1] ?? "";
+    }
+  }
+  return "";
+}
+
+// Helper function to build headers with cookie and CSRF token
+function buildHeaders(cookie: string): Record<string, string> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (cookie) headers["Cookie"] = cookie;
+  const csrf = extractCSRFToken(cookie);
+  if (csrf) headers["X-CSRFToken"] = csrf;
+  return headers;
+}
+
 export const propertiesRouter = createTRPCRouter({
   list: protectedProcedure
     .input(
@@ -12,16 +33,16 @@ export const propertiesRouter = createTRPCRouter({
         limit: z.number().default(20),
       })
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       try {
         const params = new URLSearchParams({
           page: input.page.toString(),
           limit: input.limit.toString(),
         });
 
+        const cookie = ctx.headers?.get("cookie") ?? "";
         const response = await fetch(`${API_URL}/api/properties/?${params}`, {
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
+          headers: { "Content-Type": "application/json", ...(cookie ? { Cookie: cookie } : {}) },
         });
 
         if (!response.ok) throw new Error("Failed to fetch properties");
@@ -34,11 +55,11 @@ export const propertiesRouter = createTRPCRouter({
 
   get: protectedProcedure
     .input(z.object({ id: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       try {
+        const cookie = ctx.headers?.get("cookie") ?? "";
         const response = await fetch(`${API_URL}/api/properties/${input.id}/`, {
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
+          headers: { "Content-Type": "application/json", ...(cookie ? { Cookie: cookie } : {}) },
         });
 
         if (!response.ok) throw new Error("Property not found");
@@ -59,12 +80,12 @@ export const propertiesRouter = createTRPCRouter({
         postal_code: z.string().optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       try {
+        const cookie = ctx.headers?.get("cookie") ?? "";
         const response = await fetch(`${API_URL}/api/properties/`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
+          headers: buildHeaders(cookie),
           body: JSON.stringify(input),
         });
 
@@ -90,13 +111,13 @@ export const propertiesRouter = createTRPCRouter({
         postal_code: z.string().optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       try {
         const { id, ...data } = input;
+        const cookie = ctx.headers?.get("cookie") ?? "";
         const response = await fetch(`${API_URL}/api/properties/${id}/`, {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
+          headers: buildHeaders(cookie),
           body: JSON.stringify(data),
         });
 
@@ -111,11 +132,12 @@ export const propertiesRouter = createTRPCRouter({
   delete: protectedProcedure
     .use(requirePropertyManager())
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       try {
+        const cookie = ctx.headers?.get("cookie") ?? "";
         const response = await fetch(`${API_URL}/api/properties/${input.id}/`, {
           method: "DELETE",
-          credentials: "include",
+          headers: buildHeaders(cookie),
         });
 
         if (!response.ok) throw new Error("Failed to delete property");

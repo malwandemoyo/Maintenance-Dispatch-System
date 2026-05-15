@@ -22,7 +22,7 @@ class AuthViewSet(viewsets.GenericViewSet):
     queryset = User.objects.all()
     permission_classes = [AllowAny]
     
-    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny], authentication_classes=[])
     def register(self, request):
         """Register a new user (resident by default)."""
         serializer = RegisterSerializer(data=request.data)
@@ -34,7 +34,7 @@ class AuthViewSet(viewsets.GenericViewSet):
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
-    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny], authentication_classes=[])
     def login(self, request):
         """Login user with username or email and password."""
         identifier = request.data.get('identifier') or request.data.get('username') or request.data.get('email')
@@ -103,6 +103,9 @@ class AuthViewSet(viewsets.GenericViewSet):
         if serializer.is_valid():
             serializer.save()
             return Response({'detail': 'Password changed successfully'})
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.debug(f"Change password validation errors: {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 

@@ -5,11 +5,32 @@ import { TRPCError } from "@trpc/server";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+// Helper function to extract CSRF token from cookie
+function extractCSRFToken(cookie: string): string {
+  if (!cookie) return "";
+  const parts = cookie.split(";").map((c) => c.trim());
+  for (const p of parts) {
+    if (p.startsWith("csrftoken=")) {
+      return p.split("=")[1] ?? "";
+    }
+  }
+  return "";
+}
+
+// Helper function to build headers with cookie and CSRF token
+function buildHeaders(cookie: string): Record<string, string> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (cookie) headers["Cookie"] = cookie;
+  const csrf = extractCSRFToken(cookie);
+  if (csrf) headers["X-CSRFToken"] = csrf;
+  return headers;
+}
+
 export const tasksRouter = createTRPCRouter({
   list: protectedProcedure
     .input(
       z.object({
-        status: z.enum(["pending", "assigned", "in_progress", "completed", "cancelled"]).optional(),
+        status: z.enum(["pending", "assigned", "in_progress", "completed", "cancelled", "open", "done", "deleted"]).optional(),
         priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
         page: z.number().default(1),
         limit: z.number().default(20),
@@ -73,16 +94,21 @@ export const tasksRouter = createTRPCRouter({
         title: z.string().min(1),
         description: z.string().optional(),
         priority: z.enum(["low", "medium", "high", "urgent"]).default("medium"),
-        property_id: z.number(),
+        property: z.number(),
+        assigned_to: z.number().optional(),
       })
     )
     .mutation(async ({ input, ctx }) => {
       try {
         const cookie = ctx.headers?.get("cookie") ?? "";
+        const payload = {
+          ...input,
+          status: input.assigned_to ? "assigned" : "pending",
+        };
         const response = await fetch(`${API_URL}/api/tasks/`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", ...(cookie ? { cookie } : {}) },
-          body: JSON.stringify(input),
+          headers: buildHeaders(cookie),
+          body: JSON.stringify(payload),
         });
 
         if (!response.ok) {
@@ -103,7 +129,7 @@ export const tasksRouter = createTRPCRouter({
         title: z.string().optional(),
         description: z.string().optional(),
         priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
-        status: z.enum(["pending", "assigned", "in_progress", "completed", "cancelled"]).optional(),
+        status: z.enum(["pending", "assigned", "in_progress", "completed", "cancelled", "open", "done", "deleted"]).optional(),
       })
     )
     .mutation(async ({ input, ctx }) => {
@@ -112,7 +138,7 @@ export const tasksRouter = createTRPCRouter({
         const cookie = ctx.headers?.get("cookie") ?? "";
         const response = await fetch(`${API_URL}/api/tasks/${id}/`, {
           method: "PUT",
-          headers: { "Content-Type": "application/json", ...(cookie ? { cookie } : {}) },
+          headers: buildHeaders(cookie),
           body: JSON.stringify(data),
         });
 
@@ -135,14 +161,21 @@ export const tasksRouter = createTRPCRouter({
     .mutation(async ({ input, ctx }) => {
       try {
         const cookie = ctx.headers?.get("cookie") ?? "";
-        const response = await fetch(`${API_URL}/api/tasks/${input.task_id}/assign_to/`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...(cookie ? { cookie } : {}) },
-          body: JSON.stringify({ assigned_to: input.staff_id }),
+        const response = await fetch(`${API_URL}/api/tasks/${input.task_id}/`, {
+          method: "PATCH",
+          headers: buildHeaders(cookie),
+          body: JSON.stringify({ assigned_to: input.staff_id, status: "assigned" }),
         });
 
-        if (!response.ok) throw new Error("Failed to assign task");
-        
+        if (!response.ok) {
+          if (response.status === 400) {
+            const err = await response.json().catch(() => ({}));
+            const message = Object.values(err).flat()[0] ?? "Validation error";
+            throw new Error(message as string);
+          }
+          throw new Error("Failed to assign task");
+        }
+
         return await response.json();
       } catch (error) {
         throw new Error(error instanceof Error ? error.message : "Failed to assign task");
@@ -157,7 +190,7 @@ export const tasksRouter = createTRPCRouter({
         const cookie = ctx.headers?.get("cookie") ?? "";
         const response = await fetch(`${API_URL}/api/tasks/${input.id}/mark_in_progress/`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", ...(cookie ? { cookie } : {}) },
+          headers: buildHeaders(cookie),
         });
 
         if (!response.ok) throw new Error("Failed to update status");
@@ -176,7 +209,7 @@ export const tasksRouter = createTRPCRouter({
         const cookie = ctx.headers?.get("cookie") ?? "";
         const response = await fetch(`${API_URL}/api/tasks/${input.id}/mark_completed/`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", ...(cookie ? { cookie } : {}) },
+          headers: buildHeaders(cookie),
         });
 
         if (!response.ok) throw new Error("Failed to mark completed");
@@ -195,7 +228,7 @@ export const tasksRouter = createTRPCRouter({
         const cookie = ctx.headers?.get("cookie") ?? "";
         const response = await fetch(`${API_URL}/api/tasks/${input.id}/`, {
           method: "DELETE",
-          headers: { ...(cookie ? { cookie } : {}) },
+          headers: buildHeaders(cookie),
         });
 
         if (!response.ok) throw new Error("Failed to delete task");

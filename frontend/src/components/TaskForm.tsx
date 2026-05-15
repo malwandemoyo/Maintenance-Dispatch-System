@@ -7,18 +7,22 @@ interface TaskFormProps {
     title: string;
     description?: string;
     priority: string;
-    property_id?: number;
+    property?: number;
+    assigned_to?: number;
   }) => Promise<void>;
   isLoading?: boolean;
   properties?: Array<{ id: number; name: string }>;
+  staff?: Array<{ id: number; first_name: string; last_name: string; username: string; email: string }>;
+  hidePriority?: boolean;
 }
 
-export function TaskForm({ onSubmit, isLoading = false, properties = [] }: TaskFormProps) {
+export function TaskForm({ onSubmit, isLoading = false, properties = [], staff = [], hidePriority = false }: TaskFormProps) {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     priority: 'medium',
-    property_id: properties[0]?.id || '',
+    property: properties[0]?.id || '',
+    assigned_to: '',
   });
 
   const [error, setError] = useState('');
@@ -37,7 +41,8 @@ export function TaskForm({ onSubmit, isLoading = false, properties = [] }: TaskF
         title: formData.title,
         description: formData.description || undefined,
         priority: formData.priority,
-        property_id: formData.property_id ? parseInt(formData.property_id as string) : undefined,
+        property: formData.property ? parseInt(formData.property as string) : undefined,
+        assigned_to: formData.assigned_to ? parseInt(formData.assigned_to as string) : undefined,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create task');
@@ -82,22 +87,24 @@ export function TaskForm({ onSubmit, isLoading = false, properties = [] }: TaskF
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div>
-          <label htmlFor="priority" className="block text-sm font-medium text-gray-700 mb-2">
-            Priority
-          </label>
-          <select
-            id="priority"
-            value={formData.priority}
-            onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-blue-500"
-          >
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-            <option value="urgent">Urgent</option>
-          </select>
-        </div>
+        {!hidePriority && (
+          <div>
+            <label htmlFor="priority" className="block text-sm font-medium text-gray-700 mb-2">
+              Priority
+            </label>
+            <select
+              id="priority"
+              value={formData.priority}
+              onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-blue-500"
+            >
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+              <option value="urgent">Urgent</option>
+            </select>
+          </div>
+        )}
 
         {properties.length > 0 && (
           <div>
@@ -106,8 +113,8 @@ export function TaskForm({ onSubmit, isLoading = false, properties = [] }: TaskF
             </label>
             <select
               id="property"
-              value={formData.property_id}
-              onChange={(e) => setFormData({ ...formData, property_id: e.target.value })}
+              value={formData.property}
+              onChange={(e) => setFormData({ ...formData, property: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-blue-500"
             >
               <option value="">Select property...</option>
@@ -120,6 +127,31 @@ export function TaskForm({ onSubmit, isLoading = false, properties = [] }: TaskF
           </div>
         )}
       </div>
+      {staff.length > 0 && (
+        <div>
+          <label htmlFor="assigned_to" className="block text-sm font-medium text-gray-700 mb-2">
+            Assign to staff member
+          </label>
+          <select
+            id="assigned_to"
+            value={formData.assigned_to}
+            onChange={(e) => setFormData({ ...formData, assigned_to: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-blue-500"
+          >
+            <option value="">Leave unassigned</option>
+            {staff.map((member) => {
+              const fullName = [member.first_name, member.last_name].filter(Boolean).join(' ').trim();
+              const label = fullName || member.username || member.email;
+
+              return (
+                <option key={member.id} value={member.id}>
+                  {label}
+                </option>
+              );
+            })}
+          </select>
+        </div>
+      )}
 
       <button
         type="submit"
