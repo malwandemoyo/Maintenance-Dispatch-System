@@ -34,7 +34,21 @@ export default function TaskDetailPage() {
 
   const { data: task, isLoading } = api.tasks.get.useQuery({ id: taskId });
   const { data: comments } = api.comments.list.useQuery({ task_id: taskId });
-  const { data: staff } = api.users.getMaintenanceStaff.useQuery({});
+
+  // determine property id for this task (could be number or object)
+  const propertyId = (() => {
+    if (!task) return undefined;
+    if (typeof task.property === 'number') return task.property;
+    if (task.property && typeof task.property === 'object') return task.property.id;
+    // fallback for property field name
+    return undefined;
+  })();
+
+  // only fetch maintenance staff for managers and when a property id is available
+  const { data: staff, error: staffError } = api.users.getMaintenanceStaff.useQuery(
+    { page: 1, limit: 100, propertyId },
+    { enabled: !!propertyId && session?.user?.role === 'manager' }
+  );
 
   const assignMutation = api.tasks.assign.useMutation();
   const updateStatusMutation = api.tasks.markInProgress.useMutation();
@@ -273,7 +287,7 @@ export default function TaskDetailPage() {
               {session?.user?.role === 'manager' && task.status === 'pending' && (
                 <div className="bg-white rounded-lg shadow p-6">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Assign Task</h3>
-                    {assignmentMessage && (
+                      {assignmentMessage && (
                       <div className="mb-4 rounded-lg bg-green-50 border border-green-200 p-3 text-sm text-green-800">
                         <div className="flex items-center justify-between gap-3">
                           <span>{assignmentMessage}</span>
@@ -287,13 +301,19 @@ export default function TaskDetailPage() {
                         </div>
                       </div>
                     )}
+                    {staffError && (
+                      <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-800 text-sm">
+                        {staffError instanceof Error ? staffError.message : 'Could not load maintenance staff.'}
+                      </div>
+                    )}
+
                     <select
                       value={selectedStaffId}
                       onChange={(e) => setSelectedStaffId(e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-blue-500 mb-4"
                     >
                       <option value="">Select staff member...</option>
-                      {maintenanceStaff.map((s: any) => {
+                      {(Array.isArray(staff) ? staff : staff?.results ?? []).map((s: any) => {
                         const fullName = [s.first_name, s.last_name].filter(Boolean).join(' ').trim();
                         const label = fullName || s.username || s.email;
 

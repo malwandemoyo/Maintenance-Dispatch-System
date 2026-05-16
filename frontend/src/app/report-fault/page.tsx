@@ -59,7 +59,9 @@ export default function ReportFault() {
     <div className="min-h-screen bg-gray-50 px-4 sm:px-6 lg:px-8 py-12">
       <div className="max-w-2xl mx-auto bg-white p-8 rounded-lg shadow">
         <h1 className="text-2xl font-bold mb-4">Report Fault</h1>
-        <p className="text-sm text-gray-600 mb-4">This report will be bound to your assigned property automatically.</p>
+        <p className="text-sm text-gray-600 mb-4">
+          This report will be bound to your assigned property automatically. A manager will assign the right staff or department after submission.
+        </p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700">Title</label>
@@ -87,7 +89,7 @@ export default function ReportFault() {
             <input
               type="file"
               accept="image/*"
-              onChange={(e) => setPhoto(e.target.files ? e.target.files[0] : null)}
+              onChange={(e) => setPhoto(e.target.files?.[0] ?? null)}
               className="mt-1"
             />
           </div>

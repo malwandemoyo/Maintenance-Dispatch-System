@@ -30,7 +30,7 @@ export default function DashboardPage() {
         {/* Main Content */}
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {/* Tasks Card */}
+            {/* Fault Reports Card */}
             <Link href="/tasks">
               <div className="bg-white overflow-hidden shadow rounded-lg hover:shadow-lg transition-shadow cursor-pointer h-full">
                 <div className="px-4 py-5 sm:p-6">
@@ -42,7 +42,7 @@ export default function DashboardPage() {
                     </div>
                     <div className="ml-5">
                       <dl>
-                        <dt className="text-sm font-medium text-gray-500">Tasks</dt>
+                        <dt className="text-sm font-medium text-gray-500">Fault Reports</dt>
                         <dd className="text-lg font-medium text-gray-900">View & Manage</dd>
                       </dl>
                     </div>
@@ -101,7 +101,7 @@ export default function DashboardPage() {
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
               <h3 className="text-lg font-medium text-blue-900 mb-2">System Info</h3>
               <ul className="space-y-2 text-sm text-blue-800">
-                <li>• This is a role-based task management system</li>
+                <li>• This is a role-based maintenance reporting system</li>
                 <li>• Your access level depends on your assigned role</li>
                 <li>• All data is securely managed with server-side permission checks</li>
               </ul>
@@ -115,22 +115,22 @@ export default function DashboardPage() {
               {session?.user?.role === 'manager' && (
                 <ul className="space-y-1 text-sm text-green-800">
                   <li>✓ View all maintenance requests</li>
-                  <li>✓ Assign tasks to maintenance staff</li>
+                  <li>✓ Assign reports to maintenance staff</li>
                   <li>✓ Manage properties</li>
                 </ul>
               )}
               {session?.user?.role === 'maintenance_staff' && (
                 <ul className="space-y-1 text-sm text-green-800">
-                  <li>✓ View assigned tasks only</li>
-                  <li>✓ Update task status</li>
-                  <li>✓ Add comments to tasks</li>
+                  <li>✓ View assigned reports only</li>
+                  <li>✓ Update report status</li>
+                  <li>✓ Add comments to reports</li>
                 </ul>
               )}
               {session?.user?.role === 'resident' && (
                 <ul className="space-y-1 text-sm text-green-800">
-                  <li>✓ Create maintenance requests</li>
-                  <li>✓ View your own requests</li>
-                  <li>✓ Track request status</li>
+                  <li>✓ Create fault reports</li>
+                  <li>✓ View your own fault reports</li>
+                  <li>✓ Track report status</li>
                 </ul>
               )}
             </div>

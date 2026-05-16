@@ -55,9 +55,16 @@ class UserSerializer(serializers.ModelSerializer):
         """Include staff profile information (role title) for maintenance staff."""
         try:
             if obj.role.role == 'maintenance_staff' and hasattr(obj, 'staff_profile'):
+                staff_profile = obj.staff_profile
                 return {
-                    'role_title': obj.staff_profile.role_title,
-                    'phone': obj.staff_profile.phone,
+                    'role_title': staff_profile.role_title,
+                    'phone': staff_profile.phone,
+                    'property': staff_profile.property.id if staff_profile.property else None,
+                    'property_details': {
+                        'id': staff_profile.property.id,
+                        'name': staff_profile.property.name,
+                        'address': staff_profile.property.address,
+                    } if staff_profile.property else None,
                 }
         except UserRole.DoesNotExist:
             pass
@@ -170,6 +177,24 @@ class MaintenanceTaskSerializer(serializers.ModelSerializer):
         if value not in valid_priorities:
             raise serializers.ValidationError(f"Priority must be one of: {', '.join(valid_priorities)}")
         return value
+
+    def validate(self, attrs):
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+
+        if user and user.is_authenticated:
+            try:
+                role = user.role.role
+            except UserRole.DoesNotExist:
+                role = None
+
+            if role != 'manager':
+                if attrs.get('assigned_to') is not None:
+                    raise serializers.ValidationError({'assigned_to': 'Only managers can assign maintenance staff.'})
+                if attrs.get('status') not in (None, 'pending'):
+                    raise serializers.ValidationError({'status': 'Only managers can set the report status on create.'})
+
+        return attrs
     
     def get_creator_address(self, obj):
         """Get address from creator's resident profile if available."""

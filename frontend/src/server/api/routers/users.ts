@@ -39,6 +39,7 @@ export const usersRouter = createTRPCRouter({
       z.object({
         page: z.number().default(1),
         limit: z.number().default(20),
+        propertyId: z.number().optional(),
       })
     )
     .query(async ({ input, ctx }) => {
@@ -46,14 +47,29 @@ export const usersRouter = createTRPCRouter({
         const cookie = ctx.headers?.get("cookie") ?? "";
         console.debug(`[tRPC/users.getMaintenanceStaff] forwarding cookie present=${!!cookie} value="${cookie.substring(0, 40)}..."`);
 
-        const response = await fetch(`${API_URL}/api/users/maintenance_staff/`, {
+        const params = new URLSearchParams({
+          page: input.page.toString(),
+          limit: input.limit.toString(),
+          ...(input.propertyId ? { property: String(input.propertyId) } : {}),
+        });
+
+        const response = await fetch(`${API_URL}/api/users/maintenance_staff/?${params.toString()}`, {
           headers: { "Content-Type": "application/json", ...(cookie ? { Cookie: cookie } : {}) },
         });
 
         if (!response.ok) {
-          const body = await response.text().catch(() => "");
-          console.debug(`[tRPC/users.getMaintenanceStaff] backend responded status=${response.status} body="${body}"`);
-          throw new Error("Failed to fetch maintenance staff");
+          // try to parse JSON error body, fallback to text
+          const text = await response.text().catch(() => "");
+          let detail: string | undefined;
+          try {
+            const json = JSON.parse(text || "{}");
+            detail = json.detail || json.message || undefined;
+          } catch (_) {
+            detail = text || undefined;
+          }
+
+          console.debug(`[tRPC/users.getMaintenanceStaff] backend responded status=${response.status} body="${text}"`);
+          throw new Error(detail ?? `Failed to fetch maintenance staff (status ${response.status})`);
         }
         
         const data = await response.json();

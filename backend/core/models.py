@@ -70,6 +70,7 @@ class StaffProfile(models.Model):
     """Profile for maintenance staff members containing role/title information."""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='staff_profile',
                                 limit_choices_to={'role__role': 'maintenance_staff'})
+    property = models.ForeignKey('Property', on_delete=models.SET_NULL, null=True, blank=True, related_name='staff_members')
     role_title = models.CharField(max_length=100, blank=True, null=True)
     phone = models.CharField(max_length=20, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)

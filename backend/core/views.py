@@ -15,6 +15,22 @@ from core.serializers import (
 from core.permissions import IsManager, IsMaintenanceStaff, IsResident
 
 
+def get_visible_tasks_for_user(user):
+    """Return the task queryset visible to the given user."""
+    try:
+        role = user.role.role
+    except UserRole.DoesNotExist:
+        return MaintenanceTask.objects.none()
+
+    if role == 'manager':
+        return MaintenanceTask.objects.filter(property__manager=user)
+    if role == 'maintenance_staff':
+        return MaintenanceTask.objects.filter(assigned_to=user).exclude(status='cancelled')
+    if role == 'resident':
+        return MaintenanceTask.objects.filter(created_by=user)
+    return MaintenanceTask.objects.none()
+
+
 class UserViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet for reading user information."""
     queryset = User.objects.all()
@@ -36,8 +52,32 @@ class UserViewSet(viewsets.ReadOnlyModelViewSet):
     
     @action(detail=False, methods=['get'])
     def maintenance_staff(self, request):
-        """Get all maintenance staff."""
-        staff = User.objects.filter(role__role='maintenance_staff')
+        """Get maintenance staff, optionally scoped to a property."""
+        if not request.user.is_authenticated:
+            return Response({'detail': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        try:
+            if request.user.role.role != 'manager':
+                return Response({'detail': 'Property manager access required'}, status=status.HTTP_403_FORBIDDEN)
+        except UserRole.DoesNotExist:
+            return Response({'detail': 'Property manager access required'}, status=status.HTTP_403_FORBIDDEN)
+
+        property_id = request.query_params.get('property')
+        staff = User.objects.filter(role__role='maintenance_staff').select_related('staff_profile', 'staff_profile__property')
+
+        if property_id:
+            try:
+                property_obj = Property.objects.get(id=property_id)
+            except Property.DoesNotExist:
+                return Response({'detail': 'Property not found'}, status=status.HTTP_404_NOT_FOUND)
+
+            if property_obj.manager_id != request.user.id:
+                return Response({'detail': 'Property manager access required'}, status=status.HTTP_403_FORBIDDEN)
+
+            staff = staff.filter(staff_profile__property=property_obj)
+        else:
+            staff = staff.filter(staff_profile__property__manager=request.user)
+
         serializer = self.get_serializer(staff, many=True)
         return Response(serializer.data)
 
@@ -99,32 +139,14 @@ class MaintenanceTaskViewSet(viewsets.ModelViewSet):
             'deleted': ['cancelled'],
         }
 
-        queryset = MaintenanceTask.objects.none()
+        queryset = get_visible_tasks_for_user(user)
 
-        try:
-            role = user.role.role
-            
-            if role == 'manager':
-                # Managers see all tasks in their properties
-                queryset = MaintenanceTask.objects.filter(property__manager=user)
-            
-            elif role == 'maintenance_staff':
-                # Maintenance staff see only tasks assigned to them, excluding deleted/cancelled tasks
-                queryset = MaintenanceTask.objects.filter(assigned_to=user).exclude(status='cancelled')
-            
-            elif role == 'resident':
-                # Residents see only tasks they created
-                queryset = MaintenanceTask.objects.filter(created_by=user)
-
-            if status_filter:
-                normalized_status = status_filter.lower()
-                if normalized_status in status_map:
-                    queryset = queryset.filter(status__in=status_map[normalized_status])
-                else:
-                    queryset = queryset.filter(status=normalized_status)
-        
-        except UserRole.DoesNotExist:
-            pass
+        if status_filter:
+            normalized_status = status_filter.lower()
+            if normalized_status in status_map:
+                queryset = queryset.filter(status__in=status_map[normalized_status])
+            else:
+                queryset = queryset.filter(status=normalized_status)
         
         return queryset
     
@@ -143,7 +165,7 @@ class MaintenanceTaskViewSet(viewsets.ModelViewSet):
                     raise PermissionDenied("Residents can only report faults for their assigned property")
                 # If resident has an assigned property and none was provided, auto-bind
                 if resident_prop and not provided_property:
-                    serializer.save(created_by=user, property=resident_prop)
+                    serializer.save(created_by=user, property=resident_prop, assigned_to=None, status='pending')
                     return
         except UserRole.DoesNotExist:
             pass
@@ -321,9 +343,10 @@ class TaskCommentViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         task_id = self.request.query_params.get('task_id')
+        visible_tasks = get_visible_tasks_for_user(self.request.user)
         if task_id:
-            return TaskComment.objects.filter(task_id=task_id)
-        return TaskComment.objects.all()
+            return TaskComment.objects.filter(task_id=task_id, task__in=visible_tasks)
+        return TaskComment.objects.filter(task__in=visible_tasks)
     
     def perform_create(self, serializer):
         serializer.save(author=self.request.user)
@@ -337,6 +360,7 @@ class TaskHistoryViewSet(viewsets.ReadOnlyModelViewSet):
     
     def get_queryset(self):
         task_id = self.request.query_params.get('task_id')
+        visible_tasks = get_visible_tasks_for_user(self.request.user)
         if task_id:
-            return TaskHistory.objects.filter(task_id=task_id)
-        return TaskHistory.objects.all()
+            return TaskHistory.objects.filter(task_id=task_id, task__in=visible_tasks)
+        return TaskHistory.objects.filter(task__in=visible_tasks)
