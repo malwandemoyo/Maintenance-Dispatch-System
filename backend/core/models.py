@@ -28,6 +28,8 @@ class ResidentProfile(models.Model):
     phone = models.CharField(max_length=20, blank=True, null=True)
     address = models.CharField(max_length=500, blank=True, null=True)
     unit_number = models.CharField(max_length=50, blank=True, null=True)
+    # Optional binding to a Property (resident's assigned location)
+    property = models.ForeignKey('Property', on_delete=models.SET_NULL, null=True, blank=True, related_name='residents')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -64,6 +66,23 @@ class Property(models.Model):
         return self.name
 
 
+class StaffProfile(models.Model):
+    """Profile for maintenance staff members containing role/title information."""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='staff_profile',
+                                limit_choices_to={'role__role': 'maintenance_staff'})
+    role_title = models.CharField(max_length=100, blank=True, null=True)
+    phone = models.CharField(max_length=20, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Staff Profile'
+        verbose_name_plural = 'Staff Profiles'
+
+    def __str__(self):
+        return f"{self.user.first_name or self.user.username} - {self.role_title or 'Staff'}"
+
+
 class MaintenanceTask(models.Model):
     """Represents a maintenance task that needs to be completed."""
     PRIORITY_CHOICES = [
@@ -98,6 +117,8 @@ class MaintenanceTask(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     completed_at = models.DateTimeField(null=True, blank=True)
     completion_notes = models.TextField(blank=True, null=True)
+    # Optional photo upload for a task report
+    photo = models.ImageField(upload_to='task_photos/', null=True, blank=True)
     
     class Meta:
         ordering = ['-created_at']

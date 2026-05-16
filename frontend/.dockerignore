@@ -1,0 +1,50 @@
+# Dependencies
+node_modules
+npm-debug.log
+pnpm-debug.log
+yarn-error.log
+.pnpm-store
+
+# Build outputs
+.next
+out
+dist
+build
+
+# Environment files (except .env.example)
+.env
+.env.local
+.env.*.local
+
+# IDE and editor
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# CI/CD
+.github
+.gitlab-ci.yml
+.circleci
+
+# Documentation
+README.md
+CHANGELOG.md
+LICENSE
+
+# Testing
+coverage
+.nyc_output
+jest.config.js
+
+# Misc
+*.log
+.cache
+.turbo

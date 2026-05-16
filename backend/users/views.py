@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate, login, logout
+from django.db.models import Q
 
 from users.serializers import (
     UserSerializer,
@@ -21,7 +22,7 @@ class AuthViewSet(viewsets.GenericViewSet):
     queryset = User.objects.all()
     permission_classes = [AllowAny]
     
-    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny], authentication_classes=[])
     def register(self, request):
         """Register a new user (resident by default)."""
         serializer = RegisterSerializer(data=request.data)
@@ -33,26 +34,31 @@ class AuthViewSet(viewsets.GenericViewSet):
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
-    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny], authentication_classes=[])
     def login(self, request):
-        """Login user with username and password."""
-        username = request.data.get('username')
+        """Login user with username or email and password."""
+        identifier = request.data.get('identifier') or request.data.get('username') or request.data.get('email')
         password = request.data.get('password')
         
-        if not username or not password:
+        if not identifier or not password:
             return Response(
-                {'detail': 'Please provide both username and password'},
+                {'detail': 'Please provide both an identifier and password'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        user = authenticate(request, username=username, password=password)
+        user = authenticate(request, username=identifier, password=password)
+
+        if user is None:
+            user = User.objects.filter(
+                Q(username__iexact=identifier) | Q(email__iexact=identifier)
+            ).first()
+            if user and not user.check_password(password):
+                user = None
+
         if user is not None:
             login(request, user)
             serializer = UserSerializer(user)
-            return Response({
-                'detail': 'Login successful',
-                'user': serializer.data
-            })
+            return Response(serializer.data)
         
         return Response(
             {'detail': 'Invalid credentials'},
@@ -97,6 +103,9 @@ class AuthViewSet(viewsets.GenericViewSet):
         if serializer.is_valid():
             serializer.save()
             return Response({'detail': 'Password changed successfully'})
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.debug(f"Change password validation errors: {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 

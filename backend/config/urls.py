@@ -42,3 +42,32 @@ urlpatterns = [
     path('api/', include(router.urls)),
     path('api-auth/', include('rest_framework.urls')),
 ]
+
+# Simple health endpoint for Docker healthchecks
+from django.http import JsonResponse
+from django.db import connections
+from django.db.utils import OperationalError
+
+
+def health(request):
+    """Health endpoint that checks DB connectivity.
+
+    Returns 200 if a lightweight DB query succeeds, otherwise 503.
+    This ensures Docker healthchecks reflect actual backend readiness.
+    """
+    db_conn = connections['default']
+    try:
+        # Perform a very small query to verify DB connectivity
+        with db_conn.cursor() as cursor:
+            cursor.execute('SELECT 1')
+            cursor.fetchone()
+    except OperationalError:
+        return JsonResponse({"status": "error", "detail": "database unavailable"}, status=503)
+    except Exception:
+        return JsonResponse({"status": "error", "detail": "unexpected error"}, status=503)
+    return JsonResponse({"status": "ok"})
+
+
+urlpatterns += [
+    path('api/health/', health),
+]
