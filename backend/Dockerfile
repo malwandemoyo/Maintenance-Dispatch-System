@@ -13,9 +13,12 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 
 COPY . /app/
 
+# Collect static files
+RUN python manage.py collectstatic --noinput
+
 # Make entrypoint executable before setting it as entrypoint
 RUN chmod +x /app/entrypoint.sh && ls -la /app/entrypoint.sh
 
 # Set entrypoint
 ENTRYPOINT ["/bin/bash", "/app/entrypoint.sh"]
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000"]
