@@ -14,7 +14,9 @@ declare module "next-auth" {
   }
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// For server-side auth (NextAuth authorize callback), use the direct backend URL
+// In Docker, this resolves to http://backend:8000; in dev, http://localhost:8000
+const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://backend:8000";
 
 export const authConfig = {
   trustHost: true,
@@ -33,8 +35,9 @@ export const authConfig = {
         }
 
         try {
-          // Call Django login endpoint
-          const response = await fetch(`${API_URL}/api/auth/login/`, {
+          // Call Django login endpoint using the backend URL
+          // (In Docker, uses http://backend:8000; in dev, uses http://localhost:8000)
+          const response = await fetch(`${BACKEND_URL}/api/auth/login/`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",

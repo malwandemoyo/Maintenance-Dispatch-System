@@ -1,11 +1,11 @@
 import { TRPCError } from '@trpc/server';
-import { middleware, publicProcedure } from '~/server/api/trpc';
+import { middleware } from '~/server/api/trpc';
 
 /**
  * Permission middleware for tRPC
  * Validates user role-based access to procedures
  */
-export const permissionMiddleware = middleware(async ({ ctx, next }) => {
+export const permissionMiddleware = middleware(async ({ next }) => {
   // This middleware is called for all protected procedures
   // ctx.session is already checked by protectedProcedure
   return next();

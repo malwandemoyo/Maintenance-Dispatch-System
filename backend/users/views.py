@@ -58,7 +58,9 @@ class AuthViewSet(viewsets.GenericViewSet):
         if user is not None:
             login(request, user)
             serializer = UserSerializer(user)
-            return Response(serializer.data)
+            # Return an object with a `user` key for consistency with other
+            # endpoints and test expectations.
+            return Response({'user': serializer.data})
         
         return Response(
             {'detail': 'Invalid credentials'},

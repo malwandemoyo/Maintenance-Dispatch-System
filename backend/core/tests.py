@@ -3,7 +3,7 @@ from django.contrib.auth.models import User
 from rest_framework.test import APITestCase, APIClient
 from rest_framework import status
 
-from core.models import UserRole, Property, StaffProfile, MaintenanceTask, TaskComment, TaskHistory
+from core.models import UserRole, Property, ResidentProfile, ResidentReport, StaffProfile, MaintenanceTask, TaskComment, TaskHistory
 
 
 class UserRoleSetupTestCase(TestCase):
@@ -149,6 +149,114 @@ class PropertyAccessControlTestCase(APITestCase):
         response = self.client.get(f'/api/users/maintenance_staff/?property={self.property2.id}')
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertIn('detail', response.data)
+
+
+class ReportWorkflowTestCase(APITestCase):
+    """Test the resident report workflow from submission to closure."""
+
+    def setUp(self):
+        self.client = APIClient()
+
+        self.manager_user = User.objects.create_user(username='manager1', password='manager123')
+        UserRole.objects.create(user=self.manager_user, role='manager')
+
+        self.staff_user = User.objects.create_user(username='staff1', password='staff123')
+        UserRole.objects.create(user=self.staff_user, role='maintenance_staff')
+
+        self.resident_user = User.objects.create_user(username='resident1', password='resident123')
+        UserRole.objects.create(user=self.resident_user, role='resident')
+
+        self.property = Property.objects.create(
+            name='Test Building',
+            address='123 Main St',
+            manager=self.manager_user,
+            status='active'
+        )
+
+        ResidentProfile.objects.create(
+            user=self.resident_user,
+            property=self.property,
+            address='Unit 101',
+            unit_number='101',
+        )
+
+        StaffProfile.objects.create(user=self.staff_user, property=self.property, role_title='Technician')
+
+    def test_resident_can_create_report(self):
+        self.client.force_authenticate(user=self.resident_user)
+        response = self.client.post('/api/reports/', {
+            'title': 'Leaking faucet',
+            'description': 'The faucet in the kitchen is leaking continuously.',
+            'location': 'Kitchen sink',
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['reported_by'], self.resident_user.id)
+        self.assertEqual(response.data['property'], self.property.id)
+        self.assertEqual(response.data['status'], 'new')
+
+    def test_manager_can_create_task_from_report(self):
+        report = ResidentReport.objects.create(
+            title='Broken light',
+            description='The light in the lounge is not working.',
+            property=self.property,
+            reported_by=self.resident_user,
+            location='Lounge'
+        )
+
+        self.client.force_authenticate(user=self.manager_user)
+        response = self.client.post(f'/api/reports/{report.id}/create_task/', {
+            'title': 'Fix lounge light',
+            'description': 'Investigate and replace the faulty bulb or wiring.',
+            'priority': 'high',
+            'assigned_to': self.staff_user.id,
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['report'], report.id)
+
+        report.refresh_from_db()
+        self.assertEqual(report.status, 'acknowledged')
+
+        task = MaintenanceTask.objects.get(id=response.data['id'])
+        self.assertEqual(task.report_id, report.id)
+        self.assertEqual(task.assigned_to_id, self.staff_user.id)
+
+    def test_manager_can_close_report_after_tasks_complete(self):
+        report = ResidentReport.objects.create(
+            title='Broken lock',
+            description='The front door lock is jammed.',
+            property=self.property,
+            reported_by=self.resident_user,
+            location='Front door'
+        )
+
+        task = MaintenanceTask.objects.create(
+            property=self.property,
+            report=report,
+            title='Replace lock',
+            description='Replace the broken front door lock.',
+            priority='medium',
+            status='assigned',
+            assigned_to=self.staff_user,
+            created_by=self.manager_user,
+        )
+
+        self.client.force_authenticate(user=self.manager_user)
+        response = self.client.post(f'/api/reports/{report.id}/close/')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        self.client.force_authenticate(user=self.staff_user)
+        self.client.post(f'/api/tasks/{task.id}/mark_in_progress/')
+        self.client.post(f'/api/tasks/{task.id}/mark_completed/', {'completion_notes': 'Lock replaced'})
+
+        self.client.force_authenticate(user=self.manager_user)
+        response = self.client.post(f'/api/reports/{report.id}/close/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], 'closed')
+
+        report.refresh_from_db()
+        self.assertEqual(report.status, 'closed')
 
 
 class TaskAccessControlTestCase(APITestCase):

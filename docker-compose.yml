@@ -2,6 +2,8 @@
 services:
   db:
     image: postgres:16-alpine
+    env_file:
+      - .env
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:
@@ -64,6 +66,7 @@ services:
       - "3000:3000"
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://backend:8000}
+      BACKEND_URL: ${BACKEND_URL:-http://backend:8000}
       AUTH_SECRET: ${AUTH_SECRET}
       NODE_ENV: ${NODE_ENV:-development}
       AUTH_TRUST_HOST: "true"

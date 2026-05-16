@@ -6,26 +6,60 @@ import { ProtectedRoute } from '~/components/ProtectedRoute';
 import { api } from '~/trpc/react';
 import { LoadingSpinner } from '~/components/LoadingSpinner';
 
-export default function Dashboard() {
+export default function Landing() {
   const { data: session } = useSession();
-  const { data: response, isLoading } = api.tasks.list.useQuery({
-    status: 'open',
-  });
+  const { data: response, isLoading } = api.tasks.list.useQuery(
+    { status: 'open' },
+    { enabled: session?.user?.role !== 'resident' }
+  );
 
   const tasks = response?.data ?? [];
+  const role = session?.user?.role;
+  const userName = session?.user?.name ?? 'User';
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-gray-50 px-4 sm:px-6 lg:px-8 py-12">
-        <div className="max-w-7xl mx-auto">
-          {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900">Maintenance</h1>
-            <p className="text-gray-600 mt-2">Welcome back, {session?.user?.name || 'User'}!</p>
-            {session?.user?.role === 'resident' && (
-              <p className="text-sm text-gray-500 mt-1">Use <Link href="/report-fault" className="text-blue-600">Report Fault</Link> to create a new issue.</p>
-            )}
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+        {/* Header */}
+        <header className="bg-white shadow">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <h1 className="text-3xl font-bold text-gray-900">Maintenance Dispatch</h1>
+            <p className="text-gray-600 mt-1">Welcome, <strong>{userName}</strong> <span className="text-indigo-600">({role})</span></p>
           </div>
+        </header>
+
+        {/* Main Content */}
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          {/* Resident Quick Actions */}
+          {role === 'resident' && (
+            <div className="space-y-6">
+              <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-600">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Start</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Link
+                    href="/report-fault"
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition text-center"
+                  >
+                    📝 Report a Fault
+                  </Link>
+                  <Link
+                    href="/reports"
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-lg transition text-center"
+                  >
+                    📋 View My Reports
+                  </Link>
+                </div>
+              </div>
+              <div className="bg-white rounded-lg shadow-md p-6">
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">How it works</h2>
+                <ol className="space-y-3 text-gray-700">
+                  <li><strong>1. Report a Fault:</strong> Click the button above to submit a maintenance issue.</li>
+                  <li><strong>2. Get Updates:</strong> Check your reports page to see status and manager notes.</li>
+                  <li><strong>3. Track Tasks:</strong> When a manager creates a task, you can see progress.</li>
+                </ol>
+              </div>
+            </div>
+          )}
 
           {/* Tasks Table */}
           {isLoading ? (
@@ -39,11 +73,11 @@ export default function Dashboard() {
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Task</th>
-                      {!session || session.user.role !== 'resident' ? (
+                      {role !== 'resident' && (
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Priority</th>
-                      ) : null}
+                      )}
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Assigned To</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{session && session.user.role === 'resident' ? 'Location' : 'Property'}</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Property</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
                     </tr>
@@ -53,9 +87,9 @@ export default function Dashboard() {
                       <tr key={task.id} className="hover:bg-gray-50 transition">
                         <td className="px-6 py-4">
                           <p className="font-medium text-gray-900">{task.title}</p>
-                          <p className="text-sm text-gray-600">{task.property_details?.name || task.property?.name || ''}</p>
+                          <p className="text-sm text-gray-600">{task.property_details?.name ?? task.property?.name ?? ''}</p>
                         </td>
-                        {(!session || session.user.role !== 'resident') && (
+                        {role !== 'resident' && (
                           <td className="px-6 py-4">
                             <span
                               className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${
@@ -73,12 +107,12 @@ export default function Dashboard() {
                         <td className="px-6 py-4">
                           <span className="text-sm text-gray-700">
                             {task.assigned_to_details
-                              ? `${task.assigned_to_details.first_name || task.assigned_to_details.username || ''} ${task.assigned_to_details.last_name || ''}` + (task.assigned_to_details.staff_profile?.role_title ? ` - ${task.assigned_to_details.staff_profile.role_title}` : '')
+                              ? `${task.assigned_to_details.first_name ?? task.assigned_to_details.username ?? ''} ${task.assigned_to_details.last_name ?? ''}` + (task.assigned_to_details.staff_profile?.role_title ? ` - ${task.assigned_to_details.staff_profile.role_title}` : '')
                               : 'Unassigned'}
                           </span>
                         </td>
                         <td className="px-6 py-4">
-                          <p className="text-sm text-gray-600">{task.property_details?.address || ''}</p>
+                          <p className="text-sm text-gray-600">{task.property_details?.address ?? ''}</p>
                         </td>
                         <td className="px-6 py-4">
                           <span className="inline-flex px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
@@ -102,12 +136,43 @@ export default function Dashboard() {
           ) : (
             <div className="bg-white rounded-lg shadow p-12 text-center">
               <p className="text-gray-600 text-lg">No open tasks at the moment</p>
-              <Link href="/tasks/new" className="mt-4 inline-block text-blue-600 hover:text-blue-700 font-medium">
-                Create a new task
-              </Link>
             </div>
           )}
-        </div>
+
+          {/* Staff & Manager Dashboard Cards */}
+          {(role === 'maintenance_staff' || role === 'manager') && (
+            <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {role === 'maintenance_staff' && (
+                <>
+                  <Link href="/tasks?status=open" className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition border-l-4 border-orange-500">
+                    <div className="text-3xl font-bold text-orange-600 mb-2">📂</div>
+                    <div className="font-semibold text-gray-900">Open Tasks</div>
+                    <p className="text-sm text-gray-600">Pending assignment</p>
+                  </Link>
+                  <Link href="/tasks?status=in_progress" className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition border-l-4 border-blue-500">
+                    <div className="text-3xl font-bold text-blue-600 mb-2">⚙️</div>
+                    <div className="font-semibold text-gray-900">In Progress</div>
+                    <p className="text-sm text-gray-600">Currently working on</p>
+                  </Link>
+                </>
+              )}
+              {role === 'manager' && (
+                <>
+                  <Link href="/reports?status=pending" className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition border-l-4 border-yellow-500">
+                    <div className="text-3xl font-bold text-yellow-600 mb-2">⏳</div>
+                    <div className="font-semibold text-gray-900">Pending Reports</div>
+                    <p className="text-sm text-gray-600">Awaiting review</p>
+                  </Link>
+                  <Link href="/reports?status=acknowledged" className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition border-l-4 border-blue-500">
+                    <div className="text-3xl font-bold text-blue-600 mb-2">✓</div>
+                    <div className="font-semibold text-gray-900">Acknowledged</div>
+                    <p className="text-sm text-gray-600">In progress</p>
+                  </Link>
+                </>
+              )}
+            </div>
+          )}
+        </main>
       </div>
     </ProtectedRoute>
   );

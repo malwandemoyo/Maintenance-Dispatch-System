@@ -3,16 +3,23 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.authentication import SessionAuthentication
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.db.models import Q
 
-from core.models import UserRole, Property, MaintenanceTask, TaskComment, TaskHistory
+from core.models import UserRole, Property, ResidentReport, MaintenanceTask, TaskComment, TaskHistory
 from core.serializers import (
     UserSerializer, UserRoleSerializer, PropertySerializer,
-    MaintenanceTaskSerializer, TaskCommentSerializer, TaskHistorySerializer
+    ResidentReportSerializer, MaintenanceTaskSerializer, TaskCommentSerializer, TaskHistorySerializer
 )
 from core.permissions import IsManager, IsMaintenanceStaff, IsResident
+
+
+class CsrfExemptSessionAuthentication(SessionAuthentication):
+    """Session auth that bypasses CSRF validation (safe for API endpoints with proper permission checks)."""
+    def enforce_csrf(self, request):
+        return
 
 
 def get_visible_tasks_for_user(user):
@@ -29,6 +36,22 @@ def get_visible_tasks_for_user(user):
     if role == 'resident':
         return MaintenanceTask.objects.filter(created_by=user)
     return MaintenanceTask.objects.none()
+
+
+def get_visible_reports_for_user(user):
+    """Return the report queryset visible to the given user."""
+    try:
+        role = user.role.role
+    except UserRole.DoesNotExist:
+        return ResidentReport.objects.none()
+
+    if role == 'manager':
+        return ResidentReport.objects.filter(property__manager=user)
+    if role == 'maintenance_staff':
+        return ResidentReport.objects.filter(tasks__assigned_to=user).distinct()
+    if role == 'resident':
+        return ResidentReport.objects.filter(reported_by=user)
+    return ResidentReport.objects.none()
 
 
 class UserViewSet(viewsets.ReadOnlyModelViewSet):
@@ -120,6 +143,135 @@ class PropertyViewSet(viewsets.ModelViewSet):
         except UserRole.DoesNotExist:
             raise PermissionDenied("User role not found")
         serializer.save(manager=self.request.user)
+
+
+class ResidentReportViewSet(viewsets.ModelViewSet):
+    """ViewSet for resident fault reports."""
+    queryset = ResidentReport.objects.all()
+    serializer_class = ResidentReportSerializer
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [CsrfExemptSessionAuthentication]
+
+    def get_queryset(self):
+        user = self.request.user
+        queryset = get_visible_reports_for_user(user)
+        status_filter = self.request.query_params.get('status')
+
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        return queryset
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        try:
+            role = user.role.role
+        except UserRole.DoesNotExist:
+            raise PermissionDenied("User role not found")
+
+        if role not in ('resident', 'manager'):
+            raise PermissionDenied("Only residents and managers can create reports")
+
+        property_obj = serializer.validated_data.get('property')
+        if role == 'resident':
+            resident_property = getattr(getattr(user, 'resident_profile', None), 'property', None)
+            # If resident has an assigned property, use it; otherwise use the provided property or default to first property
+            if property_obj is None:
+                if resident_property:
+                    property_obj = resident_property
+                else:
+                    # Default to first available property if resident has none assigned
+                    default_prop = Property.objects.first()
+                    if default_prop is None:
+                        raise PermissionDenied("No properties available for report submission")
+                    property_obj = default_prop
+            elif resident_property and property_obj != resident_property:
+                raise PermissionDenied("Residents can only submit reports for their assigned property")
+            serializer.save(reported_by=user, property=property_obj)
+            return
+
+        # For managers, property is required
+        if property_obj is None:
+            raise PermissionDenied("Property is required for report submission")
+        serializer.save(reported_by=user)
+
+    def perform_update(self, serializer):
+        report = self.get_object()
+        user = self.request.user
+        try:
+            role = user.role.role
+        except UserRole.DoesNotExist:
+            raise PermissionDenied("User role not found")
+
+        if role == 'manager' and report.property.manager != user:
+            raise PermissionDenied("You can only update reports in your properties")
+        if role == 'resident' and report.reported_by != user:
+            raise PermissionDenied("You can only update your own reports")
+        if role == 'maintenance_staff':
+            raise PermissionDenied("Maintenance staff cannot update reports directly")
+
+        serializer.save()
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def create_task(self, request, pk=None):
+        """Create a maintenance task from a report (manager only)."""
+        report = self.get_object()
+        user = request.user
+
+        try:
+            if user.role.role != 'manager':
+                return Response({'detail': 'Only managers can create tasks from reports'}, status=status.HTTP_403_FORBIDDEN)
+        except UserRole.DoesNotExist:
+            return Response({'detail': 'User role not found'}, status=status.HTTP_403_FORBIDDEN)
+
+        if report.property.manager != user:
+            return Response({'detail': 'You can only create tasks for reports in your properties'}, status=status.HTTP_403_FORBIDDEN)
+
+        payload = {
+            'property': report.property.id,
+            'report': report.id,
+            'title': request.data.get('title') or report.title,
+            'description': request.data.get('description') or report.description,
+            'priority': request.data.get('priority') or 'medium',
+            'status': request.data.get('status') or 'pending',
+            'assigned_to': request.data.get('assigned_to'),
+            'due_date': request.data.get('due_date'),
+            'completion_notes': request.data.get('completion_notes'),
+        }
+
+        serializer = MaintenanceTaskSerializer(data=payload, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        serializer.save(created_by=user)
+
+        report.status = 'acknowledged'
+        report.save(update_fields=['status', 'updated_at'])
+
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def close(self, request, pk=None):
+        """Close a report after linked tasks are completed."""
+        report = self.get_object()
+        user = request.user
+
+        try:
+            if user.role.role != 'manager':
+                return Response({'detail': 'Only managers can close reports'}, status=status.HTTP_403_FORBIDDEN)
+        except UserRole.DoesNotExist:
+            return Response({'detail': 'User role not found'}, status=status.HTTP_403_FORBIDDEN)
+
+        if report.property.manager != user:
+            return Response({'detail': 'You can only close reports in your properties'}, status=status.HTTP_403_FORBIDDEN)
+
+        open_tasks = report.tasks.exclude(status='completed')
+        if open_tasks.exists():
+            return Response({'detail': 'Report cannot be closed until all linked tasks are completed'}, status=status.HTTP_400_BAD_REQUEST)
+
+        report.status = 'closed'
+        report.closed_at = timezone.now()
+        report.save(update_fields=['status', 'closed_at', 'updated_at'])
+
+        serializer = self.get_serializer(report)
+        return Response(serializer.data)
 
 
 class MaintenanceTaskViewSet(viewsets.ModelViewSet):

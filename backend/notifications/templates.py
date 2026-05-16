@@ -53,6 +53,8 @@ class TaskAssignedTemplate(EmailTemplate):
     
     subject_template = "[{site_name}] New Task Assigned: {task_title}"
     text_template = """
+New Task Assigned
+
 Hello {staff_name},
 
 A new maintenance task has been assigned to you:

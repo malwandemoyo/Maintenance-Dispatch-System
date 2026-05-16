@@ -29,8 +29,10 @@ export const authRouter = createTRPCRouter({
 
         // Fetch user details from Django
         const cookie = ctx?.headers?.get("cookie") ?? "";
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (cookie) headers.Cookie = cookie;
         const response = await fetch(`${API_URL}/api/auth/me/`, {
-          headers: { "Content-Type": "application/json", ...(cookie ? { Cookie: cookie } : {}) },
+          headers,
         });
 
         if (!response.ok) throw new Error("Failed to fetch user");
@@ -63,7 +65,7 @@ export const authRouter = createTRPCRouter({
       }
 
       const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (cookie) headers["Cookie"] = cookie;
+      if (cookie) headers.Cookie = cookie;
       if (csrf) headers["X-CSRFToken"] = csrf;
 
       await fetch(`${API_URL}/api/auth/logout/`, {
@@ -73,7 +75,7 @@ export const authRouter = createTRPCRouter({
 
       await signOut({ redirect: false });
       return { success: true };
-    } catch (error) {
+    } catch {
       throw new Error("Logout failed");
     }
   }),
@@ -98,8 +100,8 @@ export const authRouter = createTRPCRouter({
         });
 
         if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.detail || "Registration failed");
+          const errorResp = await response.json();
+          throw new Error(errorResp.detail || "Registration failed");
         }
 
         const user = await response.json();
@@ -111,10 +113,12 @@ export const authRouter = createTRPCRouter({
 
   getCurrentUser: protectedProcedure.query(async ({ ctx }) => {
     try {
-      const cookie = ctx.headers?.get("cookie") ?? "";
-      const response = await fetch(`${API_URL}/api/auth/me/`, {
-        headers: { "Content-Type": "application/json", ...(cookie ? { Cookie: cookie } : {}) },
-      });
+        const cookie = ctx.headers?.get("cookie") ?? "";
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (cookie) headers.Cookie = cookie;
+        const response = await fetch(`${API_URL}/api/auth/me/`, {
+          headers,
+        });
 
       if (!response.ok) return null;
       
@@ -126,7 +130,7 @@ export const authRouter = createTRPCRouter({
         role: user.role,
         avatar: user.avatar,
       };
-    } catch (error) {
+    } catch {
       return null;
     }
   }),
@@ -158,7 +162,7 @@ export const authRouter = createTRPCRouter({
         }
 
         const headers: Record<string, string> = { "Content-Type": "application/json" };
-        if (cookie) headers["Cookie"] = cookie;
+        if (cookie) headers.Cookie = cookie;
         if (csrf) headers["X-CSRFToken"] = csrf;
 
         const response = await fetch(`${API_URL}/api/auth/profile_update/`, {
@@ -186,7 +190,7 @@ export const authRouter = createTRPCRouter({
               }
               
               throw new Error(errorMessage);
-            } catch (parseError) {
+            } catch {
               throw new Error("Profile update failed");
             }
           }
@@ -225,7 +229,7 @@ export const authRouter = createTRPCRouter({
         }
 
         const headers: Record<string, string> = { "Content-Type": "application/json" };
-        if (cookie) headers["Cookie"] = cookie;
+        if (cookie) headers.Cookie = cookie;
         if (csrf) headers["X-CSRFToken"] = csrf;
 
         const response = await fetch(`${API_URL}/api/auth/change_password/`, {

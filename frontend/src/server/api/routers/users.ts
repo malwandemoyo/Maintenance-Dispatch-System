@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
-import { requirePropertyManager } from "~/server/api/middleware/permissions";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -64,7 +63,7 @@ export const usersRouter = createTRPCRouter({
           try {
             const json = JSON.parse(text || "{}");
             detail = json.detail || json.message || undefined;
-          } catch (_) {
+          } catch {
             detail = text || undefined;
           }
 
@@ -75,9 +74,9 @@ export const usersRouter = createTRPCRouter({
         const data = await response.json();
         console.debug(`[tRPC/users.getMaintenanceStaff] backend response OK, data:`, data);
         return data;
-      } catch (error) {
-        console.error(`[tRPC/users.getMaintenanceStaff] error:`, error);
-        throw new Error(error instanceof Error ? error.message : "Failed to fetch maintenance staff");
+      } catch (_error) {
+        console.error(`[tRPC/users.getMaintenanceStaff] error:`, _error);
+        throw new Error(_error instanceof Error ? _error.message : "Failed to fetch maintenance staff");
       }
     }),
 
@@ -108,7 +107,7 @@ export const usersRouter = createTRPCRouter({
       if (!response.ok) return null;
       
       return await response.json();
-    } catch (error) {
+    } catch {
       return null;
     }
   }),

@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
-import { requireRole, requirePropertyManager, requireMaintenanceStaff } from "~/server/api/middleware/permissions";
-import { TRPCError } from "@trpc/server";
+import { requirePropertyManager, requireMaintenanceStaff } from "~/server/api/middleware/permissions";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -20,7 +19,7 @@ function extractCSRFToken(cookie: string): string {
 // Helper function to build headers with cookie and CSRF token
 function buildHeaders(cookie: string): Record<string, string> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (cookie) headers["Cookie"] = cookie;
+  if (cookie) headers.Cookie = cookie;
   const csrf = extractCSRFToken(cookie);
   if (csrf) headers["X-CSRFToken"] = csrf;
   return headers;
@@ -49,9 +48,9 @@ export const tasksRouter = createTRPCRouter({
         // Debug: log whether we're forwarding a cookie (trimmed for privacy)
         try {
           console.debug(
-            `[tRPC/tasks] forwarding cookie present=${!!cookie} value="${cookie ? cookie.slice(0,50) + (cookie.length>50? '...':'' ) : ''}"`
+            `[tRPC/tasks] forwarding cookie present=${!!cookie} value="${cookie ? cookie.slice(0,50) + (cookie.length>50? '...':'' ) : ''}"` 
           );
-        } catch (e) {
+        } catch {
           // ignore logging errors
         }
         const response = await fetch(`${API_URL}/api/tasks/?${params}`, {

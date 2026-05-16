@@ -1,6 +1,5 @@
 'use client';
 
-import { Fragment } from 'react';
 import { StatusBadge, PriorityBadge } from './Badges';
 
 interface Task {

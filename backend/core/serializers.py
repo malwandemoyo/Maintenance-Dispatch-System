@@ -3,12 +3,12 @@ Serializers for core app models with validation and consistent formatting.
 """
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from core.models import UserRole, ResidentProfile, Property, MaintenanceTask, TaskComment, TaskHistory
+from core.models import UserRole, ResidentProfile, Property, ResidentReport, MaintenanceTask, TaskComment, TaskHistory
 
 
 class ResidentProfileSerializer(serializers.ModelSerializer):
     """Serializer for resident profile information."""
-    property = serializers.PrimaryKeyRelatedField(source='property', read_only=True)
+    property = serializers.PrimaryKeyRelatedField(read_only=True)
     property_details = serializers.SerializerMethodField()
 
     class Meta:
@@ -113,6 +113,65 @@ class PropertySerializer(serializers.ModelSerializer):
         return value.strip()
 
 
+class ResidentReportSerializer(serializers.ModelSerializer):
+    """Serializer for resident-submitted fault reports."""
+    property = serializers.PrimaryKeyRelatedField(queryset=Property.objects.all(), required=False, allow_null=True)
+    property_details = PropertySerializer(source='property', read_only=True)
+    reported_by_details = UserSerializer(source='reported_by', read_only=True)
+    task_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ResidentReport
+        fields = [
+            'id', 'title', 'description', 'property', 'property_details',
+            'reported_by', 'reported_by_details', 'location', 'status',
+            'manager_notes', 'photo', 'created_at', 'updated_at', 'resolved_at',
+            'closed_at', 'task_count',
+        ]
+        read_only_fields = ['reported_by', 'created_at', 'updated_at', 'resolved_at', 'closed_at', 'task_count']
+
+    def get_task_count(self, obj):
+        return obj.tasks.count()
+
+    def validate_title(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError("Report title cannot be empty.")
+        return value.strip()
+
+    def validate_description(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError("Report description cannot be empty.")
+        if len(value.strip()) < 10:
+            raise serializers.ValidationError("Report description must be at least 10 characters.")
+        return value.strip()
+
+    def validate(self, attrs):
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+
+        if user and user.is_authenticated:
+            try:
+                role = user.role.role
+            except UserRole.DoesNotExist:
+                role = None
+
+            if role == 'resident':
+                resident_property = getattr(getattr(user, 'resident_profile', None), 'property', None)
+                property_obj = attrs.get('property') or getattr(self.instance, 'property', None)
+                if resident_property and property_obj and property_obj != resident_property:
+                    raise serializers.ValidationError({'property': 'Residents can only submit reports for their assigned property.'})
+                if not resident_property and not getattr(self.instance, 'property', None):
+                    raise serializers.ValidationError({'property': 'Residents must be assigned to a property before submitting reports.'})
+
+            if role == 'manager' and not attrs.get('property') and self.instance is None:
+                raise serializers.ValidationError({'property': 'Property is required when creating a report.'})
+
+            if role not in ('manager', 'resident'):
+                raise serializers.ValidationError({'detail': 'Only residents and managers can submit reports.'})
+
+        return attrs
+
+
 class TaskCommentSerializer(serializers.ModelSerializer):
     author_details = UserSerializer(source='author', read_only=True)
     
@@ -133,6 +192,7 @@ class TaskHistorySerializer(serializers.ModelSerializer):
 
 class MaintenanceTaskSerializer(serializers.ModelSerializer):
     """Serializer for MaintenanceTask with nested relationships."""
+    report_details = ResidentReportSerializer(source='report', read_only=True)
     assigned_to_details = UserSerializer(source='assigned_to', read_only=True)
     created_by_details = UserSerializer(source='created_by', read_only=True)
     creator_address = serializers.SerializerMethodField()
@@ -145,7 +205,7 @@ class MaintenanceTaskSerializer(serializers.ModelSerializer):
     class Meta:
         model = MaintenanceTask
         fields = [
-            'id', 'property', 'property_details', 'title', 'description', 'priority', 'status',
+            'id', 'property', 'property_details', 'report', 'report_details', 'title', 'description', 'priority', 'status',
             'assigned_to', 'assigned_to_details', 'created_by', 'created_by_details',
             'creator_address', 'creator_phone',
             'creator_property',

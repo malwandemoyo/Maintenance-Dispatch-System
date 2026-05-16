@@ -4,7 +4,7 @@ Tests for email and notification system.
 from django.test import TestCase
 from django.test.utils import override_settings
 from django.contrib.auth.models import User
-from django.core.mail import outbox
+from django.core import mail
 from core.models import UserRole, Property, MaintenanceTask
 from users.models import UserProfile
 from notifications.service import NotificationService
@@ -79,9 +79,9 @@ class EmailNotificationTestCase(TestCase):
         )
         
         NotificationService.notify_task_assigned(task, self.staff)
-        
-        self.assertEqual(len(outbox), 1)
-        email = outbox[0]
+
+        self.assertEqual(len(mail.outbox), 1)
+        email = mail.outbox[0]
         self.assertIn('Test Task', email.subject)
         self.assertIn(self.staff.email, email.to)
         self.assertIn('New Task Assigned', email.body)
@@ -99,9 +99,9 @@ class EmailNotificationTestCase(TestCase):
         )
         
         NotificationService.notify_task_completed(task, self.staff)
-        
-        self.assertEqual(len(outbox), 1)
-        email = outbox[0]
+
+        self.assertEqual(len(mail.outbox), 1)
+        email = mail.outbox[0]
         self.assertIn('Completed', email.subject)
         self.assertIn(self.manager.email, email.to)
     
@@ -115,9 +115,9 @@ class EmailNotificationTestCase(TestCase):
         )
         
         NotificationService.welcome_new_user(new_user)
-        
-        self.assertEqual(len(outbox), 1)
-        email = outbox[0]
+
+        self.assertEqual(len(mail.outbox), 1)
+        email = mail.outbox[0]
         self.assertIn('Welcome', email.subject)
         self.assertIn(new_user.email, email.to)
     
@@ -136,9 +136,9 @@ class EmailNotificationTestCase(TestCase):
         )
         
         result = NotificationService.notify_task_assigned(task, self.staff)
-        
+
         self.assertFalse(result)
-        self.assertEqual(len(outbox), 0)
+        self.assertEqual(len(mail.outbox), 0)
     
     def test_email_contains_required_fields(self):
         """Test email contains all required information."""
@@ -152,8 +152,8 @@ class EmailNotificationTestCase(TestCase):
         )
         
         NotificationService.notify_task_assigned(task, self.staff)
-        
-        email = outbox[0]
+
+        email = mail.outbox[0]
         self.assertIn('Plumbing Repair', email.body)
         self.assertIn('high', email.body.lower())
         self.assertIn('Test Property', email.body)
@@ -171,8 +171,8 @@ class EmailNotificationTestCase(TestCase):
         
         NotificationService.notify_task_assigned(task, self.staff)
         NotificationService.welcome_new_user(self.resident)
-        
-        self.assertEqual(len(outbox), 2)
+
+        self.assertEqual(len(mail.outbox), 2)
     
     def test_html_email_alternative(self):
         """Test HTML alternative is included in emails."""
@@ -187,7 +187,7 @@ class EmailNotificationTestCase(TestCase):
         
         NotificationService.notify_task_assigned(task, self.staff)
         
-        email = outbox[0]
+        email = mail.outbox[0]
         # Check for HTML alternative
         self.assertTrue(any(
             'text/html' in alt[1]
