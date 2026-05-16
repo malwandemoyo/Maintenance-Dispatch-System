@@ -8,9 +8,12 @@ from core.models import UserRole, ResidentProfile, Property, MaintenanceTask, Ta
 
 class ResidentProfileSerializer(serializers.ModelSerializer):
     """Serializer for resident profile information."""
+    property = serializers.PrimaryKeyRelatedField(source='property', read_only=True)
+    property_details = serializers.SerializerMethodField()
+
     class Meta:
         model = ResidentProfile
-        fields = ['phone', 'address', 'unit_number']
+        fields = ['phone', 'address', 'unit_number', 'property', 'property_details']
     
     def validate_phone(self, value):
         """Validate phone number format."""
@@ -18,15 +21,25 @@ class ResidentProfileSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Phone number must be at least 7 digits.")
         return value
 
+    def get_property_details(self, obj):
+        if obj.property:
+            return {
+                'id': obj.property.id,
+                'name': obj.property.name,
+                'address': obj.property.address,
+            }
+        return None
+
 
 class UserSerializer(serializers.ModelSerializer):
     """Serializer for User model with role information."""
     role = serializers.CharField(source='role.get_role_display', read_only=True)
     resident_profile = serializers.SerializerMethodField()
+    staff_profile = serializers.SerializerMethodField()
     
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'resident_profile']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'resident_profile', 'staff_profile']
         read_only_fields = ['id', 'role']
     
     def get_resident_profile(self, obj):
@@ -35,6 +48,18 @@ class UserSerializer(serializers.ModelSerializer):
             if obj.role.role == 'resident' and hasattr(obj, 'resident_profile'):
                 return ResidentProfileSerializer(obj.resident_profile).data
         except (UserRole.DoesNotExist, ResidentProfile.DoesNotExist):
+            pass
+        return None
+
+    def get_staff_profile(self, obj):
+        """Include staff profile information (role title) for maintenance staff."""
+        try:
+            if obj.role.role == 'maintenance_staff' and hasattr(obj, 'staff_profile'):
+                return {
+                    'role_title': obj.staff_profile.role_title,
+                    'phone': obj.staff_profile.phone,
+                }
+        except UserRole.DoesNotExist:
             pass
         return None
     
@@ -87,7 +112,7 @@ class TaskCommentSerializer(serializers.ModelSerializer):
     class Meta:
         model = TaskComment
         fields = ['id', 'task', 'author', 'author_details', 'content', 'created_at', 'updated_at']
-        read_only_fields = ['created_at', 'updated_at']
+        read_only_fields = ['author', 'created_at', 'updated_at']
 
 
 class TaskHistorySerializer(serializers.ModelSerializer):
@@ -108,6 +133,7 @@ class MaintenanceTaskSerializer(serializers.ModelSerializer):
     property_details = PropertySerializer(source='property', read_only=True)
     comments = TaskCommentSerializer(many=True, read_only=True)
     history = TaskHistorySerializer(many=True, read_only=True)
+    creator_property = serializers.SerializerMethodField()
     
     class Meta:
         model = MaintenanceTask
@@ -115,6 +141,8 @@ class MaintenanceTaskSerializer(serializers.ModelSerializer):
             'id', 'property', 'property_details', 'title', 'description', 'priority', 'status',
             'assigned_to', 'assigned_to_details', 'created_by', 'created_by_details',
             'creator_address', 'creator_phone',
+            'creator_property',
+            'photo',
             'created_at', 'due_date', 'updated_at', 'completed_at', 'completion_notes',
             'comments', 'history'
         ]
@@ -157,6 +185,21 @@ class MaintenanceTaskSerializer(serializers.ModelSerializer):
         if obj.created_by and hasattr(obj.created_by, 'resident_profile'):
             try:
                 return obj.created_by.resident_profile.phone
+            except ResidentProfile.DoesNotExist:
+                pass
+        return None
+
+    def get_creator_property(self, obj):
+        """Return the creator's assigned property/location if available."""
+        if obj.created_by and hasattr(obj.created_by, 'resident_profile'):
+            try:
+                prop = obj.created_by.resident_profile.property
+                if prop:
+                    return {
+                        'id': prop.id,
+                        'name': prop.name,
+                        'address': prop.address,
+                    }
             except ResidentProfile.DoesNotExist:
                 pass
         return None

@@ -1,3 +1,4 @@
+
 services:
   db:
     image: postgres:16-alpine
@@ -11,15 +12,19 @@ services:
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user} -d ${POSTGRES_DB:-maintenance_db}"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - maintenance-network
 
-  web:
-    build: ./backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     env_file:
-      - .env.development
+      - .env
     volumes:
       - ./backend:/app
       - ./backend/logs:/app/logs
@@ -33,9 +38,54 @@ services:
       DB_HOST: ${DB_HOST:-db}
       DB_PORT: ${DB_PORT:-5432}
       DJANGO_ENV: ${DJANGO_ENV:-development}
+      DEBUG: ${DEBUG:-true}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,backend}
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      - maintenance-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - NODE_ENV=${NODE_ENV:-development}
+    env_file:
+      - .env
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://backend:8000}
+      AUTH_SECRET: ${AUTH_SECRET}
+      NODE_ENV: ${NODE_ENV:-development}
+      AUTH_TRUST_HOST: "true"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - maintenance-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
 
 volumes:
   postgres_data:
+
+networks:
+  maintenance-network:
+    driver: bridge

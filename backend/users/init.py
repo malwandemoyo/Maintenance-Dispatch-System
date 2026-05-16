@@ -4,7 +4,7 @@ Helper functions to set up users, profiles, and roles.
 """
 from django.contrib.auth.models import User
 from users.models import UserProfile, UserActivity
-from core.models import UserRole, ResidentProfile
+from core.models import UserRole, ResidentProfile, StaffProfile
 
 
 def create_user_with_profile(username, email, first_name, last_name, password, role='resident'):
@@ -49,6 +49,9 @@ def create_user_with_profile(username, email, first_name, last_name, password, r
             # Create resident profile if resident
             if role == 'resident':
                 ResidentProfile.objects.get_or_create(user=user)
+            elif role == 'maintenance_staff':
+                # Create a staff profile placeholder for maintenance staff
+                StaffProfile.objects.get_or_create(user=user)
         
         return user, created
     

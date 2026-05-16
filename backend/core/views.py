@@ -20,6 +20,13 @@ class UserViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = User.objects.all()
+        role = self.request.query_params.get('role')
+        if role:
+            queryset = queryset.filter(role__role=role)
+        return queryset
     
     @action(detail=False, methods=['get'])
     def me(self, request):
@@ -84,28 +91,63 @@ class MaintenanceTaskViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Enforce strict access control based on user role."""
         user = self.request.user
+        status_filter = self.request.query_params.get('status')
+
+        status_map = {
+            'open': ['pending', 'assigned', 'in_progress'],
+            'done': ['completed'],
+            'deleted': ['cancelled'],
+        }
+
+        queryset = MaintenanceTask.objects.none()
+
         try:
             role = user.role.role
             
             if role == 'manager':
                 # Managers see all tasks in their properties
-                return MaintenanceTask.objects.filter(property__manager=user)
+                queryset = MaintenanceTask.objects.filter(property__manager=user)
             
             elif role == 'maintenance_staff':
-                # Maintenance staff see only tasks assigned to them
-                return MaintenanceTask.objects.filter(assigned_to=user)
+                # Maintenance staff see only tasks assigned to them, excluding deleted/cancelled tasks
+                queryset = MaintenanceTask.objects.filter(assigned_to=user).exclude(status='cancelled')
             
             elif role == 'resident':
                 # Residents see only tasks they created
-                return MaintenanceTask.objects.filter(created_by=user)
+                queryset = MaintenanceTask.objects.filter(created_by=user)
+
+            if status_filter:
+                normalized_status = status_filter.lower()
+                if normalized_status in status_map:
+                    queryset = queryset.filter(status__in=status_map[normalized_status])
+                else:
+                    queryset = queryset.filter(status=normalized_status)
         
         except UserRole.DoesNotExist:
             pass
         
-        return MaintenanceTask.objects.none()
+        return queryset
     
     def perform_create(self, serializer):
         """Set created_by to current user when creating a task."""
+        # If a resident is creating a task, ensure the property (if provided) matches their assigned property
+        user = self.request.user
+        try:
+            if user.role.role == 'resident':
+                # Allow resident to create tasks only for their assigned property
+                resident_prop = None
+                if hasattr(user, 'resident_profile') and user.resident_profile.property:
+                    resident_prop = user.resident_profile.property
+                provided_property = serializer.validated_data.get('property')
+                if provided_property and resident_prop and provided_property != resident_prop:
+                    raise PermissionDenied("Residents can only report faults for their assigned property")
+                # If resident has an assigned property and none was provided, auto-bind
+                if resident_prop and not provided_property:
+                    serializer.save(created_by=user, property=resident_prop)
+                    return
+        except UserRole.DoesNotExist:
+            pass
+
         serializer.save(created_by=self.request.user)
     
     def perform_update(self, serializer):
@@ -239,6 +281,36 @@ class MaintenanceTaskViewSet(viewsets.ModelViewSet):
         except User.DoesNotExist:
             return Response({'error': 'Maintenance staff member not found'}, 
                           status=status.HTTP_404_NOT_FOUND)
+    
+    def destroy(self, request, pk=None):
+        """Soft delete a task by setting status to cancelled (manager only)."""
+        task = self.get_object()
+        
+        try:
+            if request.user.role.role != 'manager':
+                return Response({'error': 'Only managers can delete tasks'}, 
+                              status=status.HTTP_403_FORBIDDEN)
+        except UserRole.DoesNotExist:
+            return Response({'error': 'User role not found'}, status=status.HTTP_403_FORBIDDEN)
+        
+        if task.property.manager != request.user:
+            return Response({'error': 'You can only delete tasks in your properties'}, 
+                          status=status.HTTP_403_FORBIDDEN)
+        
+        # Soft delete: set status to cancelled instead of hard deleting
+        old_status = task.status
+        task.status = 'cancelled'
+        task.save()
+        
+        TaskHistory.objects.create(
+            task=task,
+            changed_by=request.user,
+            change_type='status',
+            old_value=old_status,
+            new_value='cancelled'
+        )
+        
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class TaskCommentViewSet(viewsets.ModelViewSet):

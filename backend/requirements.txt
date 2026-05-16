@@ -5,3 +5,4 @@ django-daisy
 djangorestframework
 whitenoise
 gunicorn
+Pillow

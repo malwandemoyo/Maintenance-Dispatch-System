@@ -45,13 +45,33 @@ export function TRPCReactProvider(props: { children: React.ReactNode }) {
     api.createClient({
       links: [
         loggerLink({
-          enabled: (op) =>
-            process.env.NODE_ENV === "development" ||
-            (op.direction === "down" && op.result instanceof Error),
+          enabled: (op) => {
+            // Log everything in dev except:
+            // - errors that are being handled (mutations with onError callbacks)
+            // - successful responses
+            if (process.env.NODE_ENV !== "development") {
+              return op.direction === "down" && op.result instanceof Error;
+            }
+            // In dev, only log errors that aren't being handled
+            if (op.direction === "down" && op.result instanceof Error) {
+              return false; // Don't log mutation errors - they're handled in the UI
+            }
+            return true;
+          },
         }),
         httpBatchStreamLink({
           transformer: SuperJSON,
           url: getBaseUrl() + "/api/trpc",
+          // Ensure cookies (session) are included when the browser makes requests
+          fetch: (input, init) =>
+            fetch(
+              typeof input === "string"
+                ? input
+                : (input as Request).url
+                  ? (input as Request).url
+                  : input,
+              { ...(init ?? {}), credentials: "include" }
+            ),
           headers: () => {
             const headers = new Headers();
             headers.set("x-trpc-source", "nextjs-react");
@@ -61,6 +81,23 @@ export function TRPCReactProvider(props: { children: React.ReactNode }) {
       ],
     }),
   );
+
+  // Global handler: redirect to sign-in on UNAUTHORIZED errors for mutations
+  // (prevents silent dehydrated-pending rejections and gives user a path to re-auth)
+  queryClient.setDefaultOptions({
+    mutations: {
+      onError: (error: unknown) => {
+        const e = error as any;
+        const code = e?.data?.code ?? e?.data?.httpStatus ?? e?.message;
+        if (code === 'UNAUTHORIZED' || code === 401) {
+          // navigate to NextAuth sign in page
+          if (typeof window !== 'undefined') {
+            window.location.href = '/api/auth/signin';
+          }
+        }
+      },
+    },
+  });
 
   return (
     <QueryClientProvider client={queryClient}>

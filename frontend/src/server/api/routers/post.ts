@@ -27,7 +27,11 @@ export const postRouter = createTRPCRouter({
       return post;
     }),
 
-  getLatest: protectedProcedure.query(() => {
+  // Return the latest post only when a session user exists. Use a public
+  // procedure so server/client renders won't throw UNAUTHORIZED during
+  // hydration; return `null` when unauthenticated.
+  getLatest: publicProcedure.query(({ ctx }) => {
+    if (!ctx.session?.user) return null;
     return post;
   }),
 

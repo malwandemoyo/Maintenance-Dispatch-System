@@ -156,19 +156,29 @@ CORS_ALLOWED_ORIGINS = [
 CORS_ALLOW_CREDENTIALS = True
 
 # Session Configuration
-SESSION_COOKIE_SECURE = os.getenv('SESSION_COOKIE_SECURE', 'false').lower() in ('true', '1')
+# For cross-origin server-to-server requests (frontend server to Django):
+# - Development (HTTP): Use SAMESITE='Lax' (SameSite=None requires HTTPS/Secure)
+# - Production (HTTPS): Use SAMESITE='None' with SECURE=True (required by browser policy)
+SESSION_COOKIE_SECURE = not DEBUG  # True in production, False in development
 SESSION_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_SAMESITE = 'Lax' if DEBUG else 'None'  # Lax for dev (HTTP), None for prod (HTTPS)
 
 # CSRF Configuration
-CSRF_COOKIE_SECURE = os.getenv('CSRF_COOKIE_SECURE', 'false').lower() in ('true', '1')
+CSRF_COOKIE_SECURE = not DEBUG  # True in production, False in development
 CSRF_COOKIE_HTTPONLY = False  # Frontend needs to read CSRF token
-CSRF_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SAMESITE = 'Lax' if DEBUG else 'None'  # Lax for dev (HTTP), None for prod (HTTPS)
 CSRF_TRUSTED_ORIGINS = [
     'http://localhost:3000',
     'http://localhost:8000',
     'http://127.0.0.1:3000',
 ]
+
+# Disable automatic APPEND_SLASH redirects for POST/PUT/PATCH/DELETE requests
+# to avoid RuntimeError when a client posts to a URL without a trailing slash.
+# Prefer normalizing client URLs to include trailing slashes, but disabling
+# APPEND_SLASH is convenient for development where different origins/clients
+# may omit the trailing slash.
+APPEND_SLASH = False
 
 # Email Configuration
 # In development: Use LoggingEmailBackend (logs to file + console, no SMTP needed)
@@ -219,6 +229,12 @@ LOGGING = {
             'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO' if not TESTING else 'WARNING'),
         },
         'notifications': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        # Reduce verbosity from Django's autoreload utility which can be very chatty
+        'django.utils.autoreload': {
             'handlers': ['console'],
             'level': 'INFO',
             'propagate': False,
