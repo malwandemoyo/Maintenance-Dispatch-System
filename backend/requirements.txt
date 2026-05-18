@@ -6,3 +6,4 @@ djangorestframework
 whitenoise
 gunicorn
 Pillow
+whitenoise

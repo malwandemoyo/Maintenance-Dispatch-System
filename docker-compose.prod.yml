@@ -1,7 +1,3 @@
-# Production override - use with: docker compose -f docker-compose.yml -f docker-compose.prod.yml up
-# Optimized for production: no volumes (except data), hardened security, single replicas
-
-version: '3.8'
 
 services:
   db:
@@ -24,17 +20,56 @@ services:
       DEBUG: "false"
       DJANGO_LOG_LEVEL: INFO
       PYTHONUNBUFFERED: "1"
+    networks:
+      - maintenance-network
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      target: production
       args:
         - NODE_ENV=production
     restart: always
-    command: next start
+    command: node server.js
     volumes: []
     ports: []
     environment:
       NODE_ENV: production
-      NEXT_PUBLIC_API_URL: ${PRODUCTION_API_URL}
+      NEXT_PUBLIC_API_URL: https://${BACKEND_DOMAIN}
+    networks:
+      - maintenance-network
+    depends_on:
+      - backend
+
+  # ==================== Cloudflare Tunnel - Frontend ====================
+  cloudflared-frontend:
+    image: cloudflare/cloudflared:latest
+    restart: always
+    command: tunnel run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    environment:
+      - CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    networks:
+      - maintenance-network
+    depends_on:
+      - frontend
+
+  # ==================== Cloudflare Tunnel - Backend ====================
+  cloudflared-backend:
+    image: cloudflare/cloudflared:latest
+    restart: always
+    command: tunnel run --token ${CLOUDFLARE_BACKEND_TUNNEL_TOKEN}
+    environment:
+      - CLOUDFLARE_BACKEND_TUNNEL_TOKEN=${CLOUDFLARE_BACKEND_TUNNEL_TOKEN}
+    networks:
+      - maintenance-network
+    depends_on:
+      - backend
+
+volumes:
+  db_data:
+    driver: local
+
+networks:
+  maintenance-network:
+    driver: bridge

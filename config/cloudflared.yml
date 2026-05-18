@@ -1,0 +1,21 @@
+# Cloudflare Tunnel Configuration for the frontend
+# This creates a secure tunnel from Cloudflare directly to the Next.js app
+# No Traefik required
+# Configured for: ${FRONTEND_DOMAIN}
+
+tunnel: ${CLOUDFLARE_TUNNEL_ID}
+credentials-file: /etc/cloudflared/creds.json
+
+# ==================== INGRESS ====================
+# Maps traffic to the frontend service directly
+ingress:
+  # Frontend wildcard subdomain (optional)
+  - hostname: "*.${FRONTEND_DOMAIN}"
+    service: http://frontend:3000
+  
+  # Frontend domain
+  - hostname: "${FRONTEND_DOMAIN}"
+    service: http://frontend:3000
+  
+  # Health check endpoint
+  - service: http_status:200

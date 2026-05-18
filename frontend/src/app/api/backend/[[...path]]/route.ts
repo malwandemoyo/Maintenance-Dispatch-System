@@ -3,14 +3,17 @@ import { NextResponse } from 'next/server';
 
 const BACKEND = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
+type RouteContext = {
+  params: Promise<{ path?: string[] }>;
+};
+
 async function proxyRequest(
   req: NextRequest,
-  props: { params?: { path?: string[] } }
+  props: RouteContext
 ) {
   try {
     // Extract path from params (Next.js catch-all route)
-    const { params } = props || {};
-    const { path = [] } = params || {};
+    const { path = [] } = await props.params;
     
     // Reconstruct the full path from the catch-all array
     // Check the raw request URL (from referer or reconstruct from nextUrl)
@@ -102,22 +105,22 @@ async function proxyRequest(
   }
 }
 
-export async function GET(req: NextRequest, props: { params?: { path?: string[] } }) {
+export async function GET(req: NextRequest, props: RouteContext) {
   return proxyRequest(req, props);
 }
 
-export async function POST(req: NextRequest, props: { params?: { path?: string[] } }) {
+export async function POST(req: NextRequest, props: RouteContext) {
   return proxyRequest(req, props);
 }
 
-export async function PUT(req: NextRequest, props: { params?: { path?: string[] } }) {
+export async function PUT(req: NextRequest, props: RouteContext) {
   return proxyRequest(req, props);
 }
 
-export async function DELETE(req: NextRequest, props: { params?: { path?: string[] } }) {
+export async function DELETE(req: NextRequest, props: RouteContext) {
   return proxyRequest(req, props);
 }
 
-export async function HEAD(req: NextRequest, props: { params?: { path?: string[] } }) {
+export async function HEAD(req: NextRequest, props: RouteContext) {
   return proxyRequest(req, props);
 }

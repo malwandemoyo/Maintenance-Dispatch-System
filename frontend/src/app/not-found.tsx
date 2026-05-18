@@ -6,7 +6,7 @@ export default function NotFound() {
       <div className="max-w-2xl w-full bg-white/90 backdrop-blur rounded-3xl shadow-2xl border border-blue-100 p-8 sm:p-12 text-center">
         <div className="text-7xl sm:text-8xl font-black text-blue-600">404</div>
         <h1 className="mt-4 text-3xl sm:text-4xl font-bold text-gray-900">
-          Oops, you're lost;
+          Oops, you&apos;re lost;
         </h1>
         <p className="mt-4 text-gray-600 text-base sm:text-lg leading-relaxed">
           The page you’re looking for seems to have vanished

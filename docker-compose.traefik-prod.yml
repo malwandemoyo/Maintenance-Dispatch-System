@@ -1,0 +1,47 @@
+# Docker Compose Override for Traefik + Cloudflare Tunnel
+# Usage: docker compose -f docker-compose.yml -f docker-compose.traefik-prod.yml up -d
+
+version: '3.8'
+
+services:
+  db:
+    restart: always
+    # Remove direct port exposure - use through tunnel only
+    ports: []
+    networks:
+      - maintenance-network
+
+  backend:
+    restart: always
+    # Remove direct port exposure
+    ports: []
+    networks:
+      - maintenance-network
+    # Add Traefik labels for auto-discovery
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend.rule=Host(`api.${DOMAIN}`)"
+      - "traefik.http.routers.backend.service=backend"
+      - "traefik.http.services.backend.loadbalancer.server.port=8000"
+      - "traefik.http.services.backend.loadbalancer.healthcheck.path=/api/health/"
+      - "traefik.http.services.backend.loadbalancer.healthcheck.interval=30s"
+
+  frontend:
+    restart: always
+    # Remove direct port exposure
+    ports: []
+    networks:
+      - maintenance-network
+    # Add Traefik labels for auto-discovery
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`${DOMAIN}`,`www.${DOMAIN}`)"
+      - "traefik.http.routers.frontend.service=frontend"
+      - "traefik.http.services.frontend.loadbalancer.server.port=3000"
+
+volumes:
+  postgres_data:
+
+networks:
+  maintenance-network:
+    external: true

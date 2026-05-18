@@ -1,0 +1,27 @@
+# Cloudflare Tunnel Configuration - Backend Only
+# Separate tunnel for backend domain (backend.malwande.me)
+# This allows independent management of backend access
+# Configured for: ${BACKEND_DOMAIN}
+
+tunnel: ${CLOUDFLARE_BACKEND_TUNNEL_ID}
+credentials-file: /etc/cloudflared/creds-backend.json
+
+# ==================== INGRESS ====================
+# Maps traffic to backend service directly
+ingress:
+  # Backend domain - routes directly to backend service
+  - hostname: "${BACKEND_DOMAIN}"
+    service: https://backend:8000
+    originRequest:
+      noTLSVerify: true
+      httpHostHeader: ${BACKEND_DOMAIN}
+  
+  # Wildcard subdomains (optional - for future API expansion)
+  - hostname: "*.${BACKEND_DOMAIN}"
+    service: https://backend:8000
+    originRequest:
+      noTLSVerify: true
+      httpHostHeader: ${BACKEND_DOMAIN}
+  
+  # Health check endpoint
+  - service: http_status:200

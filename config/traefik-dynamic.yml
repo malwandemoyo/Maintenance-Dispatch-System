@@ -1,0 +1,163 @@
+# Traefik Dynamic Configuration
+# This file defines routes, middlewares, and services
+# Reference: https://doc.traefik.io/traefik/reference/dynamic-configuration/
+
+# ==================== MIDDLEWARES ====================
+http:
+  middlewares:
+    # Security headers
+    security-headers:
+      headers:
+        accessControlAllowOriginList:
+          - "*"
+        accessControlAllowMethods:
+          - "GET"
+          - "POST"
+          - "PUT"
+          - "DELETE"
+          - "OPTIONS"
+        accessControlAllowHeaders:
+          - "Content-Type"
+          - "Authorization"
+        accessControlExposeHeaders:
+          - "Content-Length"
+          - "Content-Type"
+        accessControlMaxAge: 3600
+        accessControlAllowCredentials: true
+        
+        # HSTS
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        
+        # CSP
+        contentSecurityPolicy: "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline';"
+        
+        # Security headers
+        frameDeny: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: "strict-origin-when-cross-origin"
+        permissionsPolicy: "geolocation=(), microphone=(), camera=()"
+    
+    # GZIP compression
+    gzip:
+      compress: true
+      excludedContentTypes:
+        - application/json
+        - text/plain
+    
+    # Rate limiting
+    rate-limit:
+      rateLimit:
+        average: 100
+        period: 60s
+        burst: 50
+    
+    # Request ID header
+    request-id:
+      headers:
+        customRequestHeaders:
+          X-Request-ID: ""
+    
+    # Basic auth for admin endpoints
+    basic-auth:
+      basicAuth:
+        users:
+          - "admin:${TRAEFIK_ADMIN_PASSWORD_HASH}"
+    
+    # Redirect to HTTPS
+    redirect-https:
+      redirectScheme:
+        scheme: https
+        permanent: true
+    
+    # CORS for API
+    cors:
+      headers:
+        accessControlAllowOriginList:
+          - "https://${DOMAIN}"
+          - "https://www.${DOMAIN}"
+        accessControlAllowMethods:
+          - "GET"
+          - "POST"
+          - "PUT"
+          - "DELETE"
+          - "OPTIONS"
+        accessControlAllowHeaders:
+          - "Content-Type"
+          - "Authorization"
+        accessControlMaxAge: 3600
+
+  # ==================== ROUTERS ====================
+  routers:
+    # Frontend route (from FRONTEND_DOMAIN env var)
+    frontend:
+      entryPoints:
+        - websecure
+      rule: "Host(`${FRONTEND_DOMAIN}`) || Host(`www.${FRONTEND_DOMAIN}`)"
+      service: frontend
+      middlewares:
+        - security-headers
+        - gzip
+        - rate-limit
+      tls:
+        certResolver: cloudflare
+
+    # API/Backend route (from BACKEND_DOMAIN env var)
+    backend:
+      entryPoints:
+        - websecure
+      rule: "Host(`${BACKEND_DOMAIN}`)"
+      service: backend
+      middlewares:
+        - security-headers
+        - gzip
+        - rate-limit
+        - cors
+      tls:
+        certResolver: cloudflare
+
+    # Traefik dashboard (from FRONTEND_DOMAIN env var)
+    traefik-dashboard:
+      entryPoints:
+        - websecure
+      rule: "Host(`traefik.${FRONTEND_DOMAIN}`)"
+      service: api@internal
+      middlewares:
+        - basic-auth
+        - security-headers
+      tls:
+        certResolver: cloudflare
+
+  # ==================== SERVICES ====================
+  services:
+    # Frontend service
+    frontend:
+      loadBalancer:
+        servers:
+          - url: "http://frontend:3000"
+        healthCheck:
+          path: "/"
+          interval: "30s"
+          timeout: "5s"
+        passHostHeader: true
+
+    # Backend service (API)
+    backend:
+      loadBalancer:
+        servers:
+          - url: "http://backend:8000"
+        healthCheck:
+          path: "/api/health/"
+          interval: "30s"
+          timeout: "10s"
+        passHostHeader: true
+
+# ==================== TCP SERVICES (if needed) ====================
+tcp:
+  services: {}
+
+# ==================== UDP SERVICES (if needed) ====================
+udp:
+  services: {}
