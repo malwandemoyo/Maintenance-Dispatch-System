@@ -51,7 +51,7 @@ RUN pip install gunicorn
 RUN chmod +x /app/entrypoint.sh
 
 # Collect static files
-RUN python manage.py collectstatic --noinput || true
+RUN python manage.py collectstatic --noinput
 
 EXPOSE 8000
 

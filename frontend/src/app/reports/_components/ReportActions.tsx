@@ -18,7 +18,7 @@ export default function ReportActions({ id }: { id: string | number }) {
       } else {
         alert('Task created from report')
       }
-    } catch (err) {
+    } catch {
       alert('Network error')
     } finally {
       setLoading(false)
@@ -35,7 +35,7 @@ export default function ReportActions({ id }: { id: string | number }) {
       } else {
         alert('Report closed')
       }
-    } catch (err) {
+    } catch {
       alert('Network error')
     } finally {
       setLoading(false)

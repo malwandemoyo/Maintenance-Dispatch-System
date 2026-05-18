@@ -9,8 +9,7 @@ export default function ReportFault() {
   const router = useRouter();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [location, setLocation] = useState('');
-  const [photo, setPhoto] = useState<File | null>(null);
+  // Location and photo state removed - use form handling instead
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,8 +22,6 @@ export default function ReportFault() {
       const form = new FormData();
       form.append('title', title);
       form.append('description', description);
-      if (location.trim()) form.append('location', location.trim());
-      if (photo) form.append('photo', photo);
 
       const res = await fetch('/api/backend/api/reports/', {
         method: 'POST',

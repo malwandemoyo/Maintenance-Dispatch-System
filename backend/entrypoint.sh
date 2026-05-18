@@ -15,6 +15,12 @@ while ! nc -z $DB_HOST $DB_PORT; do
 done
 echo "Database is ready!"
 
+# Collect static files in production so the backend can serve admin and DRF assets.
+if [ "$ENVIRONMENT" = "production" ]; then
+        echo "Collecting static files..."
+        python manage.py collectstatic --noinput
+fi
+
 # Run migrations
 echo "Running migrations..."
 python manage.py migrate --noinput

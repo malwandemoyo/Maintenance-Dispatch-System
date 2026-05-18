@@ -5,8 +5,8 @@
 FROM node:20-alpine AS deps
 WORKDIR /app
 
-# Install pnpm
-RUN npm install -g pnpm@10.25.0
+# Install pnpm via Corepack for a more stable production install path
+RUN corepack enable && corepack prepare pnpm@10.25.0 --activate
 
 # Copy pnpm lock file
 COPY pnpm-lock.yaml ./
@@ -18,8 +18,8 @@ RUN pnpm install --frozen-lockfile --prod
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Install pnpm
-RUN npm install -g pnpm@10.25.0
+# Install pnpm via Corepack for a more stable production install path
+RUN corepack enable && corepack prepare pnpm@10.25.0 --activate
 
 # Copy pnpm lock file and all source
 COPY pnpm-lock.yaml ./
@@ -41,19 +41,16 @@ RUN pnpm run build
 FROM node:20-alpine AS production
 WORKDIR /app
 
-# Install pnpm
-RUN npm install -g pnpm@10.25.0
-
 # Set production environment
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Copy built application and dependencies from builder
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
+# Copy the entire standalone output (includes server.js)
+COPY --from=builder /app/.next/standalone /app
+# Copy static files
+COPY --from=builder /app/.next/static /app/.next/static
+COPY --from=builder /app/public /app/public
 
-# Use the production runner
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
@@ -65,8 +62,8 @@ CMD ["node", "server.js"]
 FROM node:20-alpine AS development
 WORKDIR /app
 
-# Install pnpm
-RUN npm install -g pnpm@10.25.0
+# Install pnpm via Corepack for a more stable production install path
+RUN corepack enable && corepack prepare pnpm@10.25.0 --activate
 
 # Set development environment
 ENV NODE_ENV=development

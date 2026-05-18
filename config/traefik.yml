@@ -1,0 +1,87 @@
+# Traefik Static Configuration
+# This file defines Traefik's core behavior
+# Reference: https://doc.traefik.io/traefik/reference/static-configuration/
+
+# ==================== ENTRYPOINTS ====================
+entryPoints:
+  web:
+    address: ":80"
+    # Redirect HTTP to HTTPS
+    http:
+      redirections:
+        entrypoint:
+          to: websecure
+          scheme: https
+
+  websecure:
+    address: ":443"
+    http:
+      tls:
+        certResolver: cloudflare
+        domains:
+          - main: ${FRONTEND_DOMAIN}
+            sans:
+              - "*.${FRONTEND_DOMAIN}"
+              - ${BACKEND_DOMAIN}
+
+# ==================== CERTIFICATE RESOLVERS ====================
+certificateResolvers:
+  cloudflare:
+    acme:
+      # Email for ACME alerts
+      email: ${CF_API_EMAIL}
+      # ACME storage path
+      storage: /acme/acme.json
+      # DNS provider (Cloudflare)
+      dnsChallenge:
+        provider: cloudflare
+        # 60 second delay for DNS propagation
+        delayBeforeCheck: 60
+        # DNS servers to use for validation
+        resolvers:
+          - "1.1.1.1:53"
+          - "8.8.8.8:53"
+
+# ==================== API & DASHBOARD ====================
+api:
+  # Enable dashboard
+  dashboard: true
+  debug: false
+  # Insecure API (only on localhost)
+  insecure: false
+
+# ==================== PROVIDERS ====================
+providers:
+  # Docker provider for auto-discovery
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: maintenance-network
+    
+    # Use container names as default hostnames
+    defaultRule: "Host(`{{ index .Labels \"com.docker.compose.service\" }}.{{ env \"DOMAIN\" }}`)"
+  
+  # File provider for dynamic configuration
+  file:
+    filename: /traefik-dynamic.yml
+    watch: true
+
+# ==================== LOGGING ====================
+log:
+  level: INFO
+  filePath: /logs/traefik.log
+
+accessLog:
+  filePath: /logs/access.log
+  format: json
+
+# ==================== METRICS ====================
+metrics:
+  prometheus:
+    addEntryPointsLabels: true
+    addServicesLabels: true
+
+# ==================== GLOBAL ====================
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
