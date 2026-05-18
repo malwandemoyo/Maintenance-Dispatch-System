@@ -26,37 +26,11 @@ RUN pip install --upgrade pip && \
 # Copy application code
 COPY . /app/
 
-# ==================== DEVELOPMENT STAGE ====================
-FROM base AS development
-
-ENV DJANGO_ENV=development
-ENV DEBUG=true
-
-# Make entrypoint executable
-RUN chmod +x /app/entrypoint.sh
-
-ENTRYPOINT ["/bin/bash", "/app/entrypoint.sh"]
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
-
-# ==================== PRODUCTION STAGE ====================
-FROM base AS production
-
-ENV DJANGO_ENV=production
-ENV DEBUG=false
-
-# Install gunicorn
-RUN pip install gunicorn
-
-# Make entrypoint executable
-RUN chmod +x /app/entrypoint.sh
-
 # Collect static files
 RUN python manage.py collectstatic --noinput
 
-EXPOSE 8000
-
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD curl -f http://localhost:8000/api/health/ || exit 1
+# Make entrypoint executable before setting it as entrypoint
+RUN chmod +x /app/entrypoint.sh && ls -la /app/entrypoint.sh
 
 # Use entrypoint for production migrations
 ENTRYPOINT ["/bin/bash", "/app/entrypoint.sh"]
