@@ -1,9 +1,3 @@
-# Production override - use with: docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.traefik.yml up
-# Optimized for production with Traefik + Cloudflare Tunnel
-# Domains configured via .env: FRONTEND_DOMAIN and BACKEND_DOMAIN
-# Cloudflare Tunnel: Secure edge connection (no exposed ports)
-
-version: '3.8'
 
 services:
   db:
