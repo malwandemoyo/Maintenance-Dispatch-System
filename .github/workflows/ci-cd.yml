@@ -32,11 +32,25 @@ jobs:
           node-version: "20"
 
       # Use Corepack (bundled with Node) to prepare/activate pnpm reliably
-      - name: Enable Corepack and prepare pnpm
+      - name: Ensure pnpm is available (Corepack, then fallback)
         run: |
-          corepack enable
-          corepack prepare pnpm@10.25.0 --activate
-          pnpm --version
+          set -e
+          echo "Checking for pnpm..."
+          if command -v pnpm >/dev/null 2>&1; then
+            echo "pnpm is already installed"
+            pnpm --version
+          else
+            if command -v corepack >/dev/null 2>&1; then
+              echo "Corepack found — enabling and preparing pnpm@10.25.0"
+              corepack enable
+              corepack prepare pnpm@10.25.0 --activate
+              pnpm --version
+            else
+              echo "Corepack not found — falling back to npm global install of pnpm"
+              npm install -g pnpm@10.25.0
+              pnpm --version
+            fi
+          fi
 
       - name: Install dependencies
         working-directory: ./frontend
