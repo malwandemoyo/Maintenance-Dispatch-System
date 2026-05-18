@@ -18,7 +18,6 @@ interface CommentThreadProps {
 }
 
 export function CommentThread({
-  taskId,
   comments,
   onAddComment,
   isAddingComment = false,

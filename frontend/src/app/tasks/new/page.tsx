@@ -4,13 +4,20 @@ import { useRouter } from 'next/navigation';
 import { ProtectedRoute } from '~/components/ProtectedRoute';
 import { TaskForm } from '~/components/TaskForm';
 import { api } from '~/trpc/react';
+import { useState } from 'react';
 
 export default function NewTaskPage() {
   const router = useRouter();
   const utils = api.useUtils();
   const createTaskMutation = api.tasks.create.useMutation();
   const { data: properties } = api.properties.list.useQuery({ page: 1, limit: 100 });
-  const { data: staff } = api.users.getMaintenanceStaff.useQuery({ page: 1, limit: 100 });
+  const [selectedProperty, setSelectedProperty] = useState<number | string>('');
+
+  // fetch maintenance staff only when a property is selected
+  const { data: staff, error: staffError } = api.users.getMaintenanceStaff.useQuery(
+    { page: 1, limit: 100, propertyId: selectedProperty ? Number(selectedProperty) : undefined },
+    { enabled: !!selectedProperty }
+  );
   const maintenanceStaff = Array.isArray(staff) ? staff : staff?.results ?? [];
 
   const handleSubmit = async (data: {
@@ -56,10 +63,18 @@ export default function NewTaskPage() {
                 username: member.username,
                 email: member.email,
               }))}
+              selectedProperty={selectedProperty}
+              onPropertyChange={(val) => setSelectedProperty(val)}
             />
+            {staffError && (
+              <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800">
+                {staffError instanceof Error ? staffError.message : 'Could not load maintenance staff for this property.'}
+              </div>
+            )}
           </div>
         </div>
       </div>
     </ProtectedRoute>
   );
 }
+

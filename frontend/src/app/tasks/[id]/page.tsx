@@ -19,6 +19,35 @@ function formatStaffName(member?: {
   return fullName || member.username || 'Unassigned';
 }
 
+function formatCommentAuthor(comment: {
+  author_details?: {
+    username?: string;
+    first_name?: string;
+    last_name?: string;
+    role?: string;
+  };
+  author_name?: string;
+  isCurrentUser?: boolean;
+}, fallback = 'You') {
+  const firstName = comment.isCurrentUser ? 'You' : (comment.author_details?.first_name || comment.author_name || fallback);
+  const roleValue = String(comment.author_details?.role || 'user').toLowerCase();
+  const role = roleValue.includes('manager') ? 'property manager' : roleValue;
+
+  return `${firstName} - ${role}`;
+}
+
+function formatCommentTimestamp(value?: string) {
+  if (!value) return '';
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(parsed);
+}
+
 export default function TaskDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -31,10 +60,27 @@ export default function TaskDetailPage() {
   const [assignedStaffLabel, setAssignedStaffLabel] = useState('');
   const [actionMessage, setActionMessage] = useState('');
   const [activeAction, setActiveAction] = useState<'progress' | 'completed' | null>(null);
+  const [optimisticComments, setOptimisticComments] = useState<any[]>([]);
 
+  const { data: currentUser } = api.users.getCurrentUser.useQuery();
   const { data: task, isLoading } = api.tasks.get.useQuery({ id: taskId });
   const { data: comments } = api.comments.list.useQuery({ task_id: taskId });
-  const { data: staff } = api.users.getMaintenanceStaff.useQuery({});
+
+  // determine property id for this task (could be number or object)
+  const propertyId = (() => {
+    if (!task) return undefined;
+    if (task.property_details?.id) return task.property_details.id;
+    if (task.property_id) return task.property_id;
+    if (typeof task.property === 'number') return task.property;
+    if (task.property && typeof task.property === 'object') return task.property.id;
+    return undefined;
+  })();
+
+  // only fetch maintenance staff for managers and when a property id is available
+  const { data: staff, error: staffError } = api.users.getMaintenanceStaff.useQuery(
+    { page: 1, limit: 100, propertyId },
+    { enabled: !!propertyId && session?.user?.role === 'manager' }
+  );
 
   const assignMutation = api.tasks.assign.useMutation();
   const updateStatusMutation = api.tasks.markInProgress.useMutation();
@@ -49,6 +95,15 @@ export default function TaskDetailPage() {
     formatStaffName(task?.assigned_to_details) ||
     task?.assigned_to_name ||
     'Unassigned';
+  const propertyLabel =
+    task?.property_details?.name ||
+    task?.property_name ||
+    (typeof task?.property === 'object' ? task?.property?.name : undefined) ||
+    'Unknown';
+  const displayComments = [...optimisticComments, ...(comments?.results ?? [])].filter(
+    (entry, index, all) => index === all.findIndex((candidate) => String(candidate.id) === String(entry.id))
+  );
+  const currentUserIdentifier = currentUser?.username || currentUser?.email || session?.user?.name || '';
 
   const handleAssign = async () => {
     if (!selectedStaffId) return;
@@ -108,10 +163,35 @@ export default function TaskDetailPage() {
     e.preventDefault();
     if (!comment.trim()) return;
 
+    const tempId = `temp-${Date.now()}`;
+    const optimisticComment = {
+      id: tempId,
+      task: taskId,
+      content: comment.trim(),
+      created_at: new Date().toISOString(),
+      author_name: currentUser?.first_name || session?.user?.name || 'You',
+      author_details: {
+        username: currentUser?.username || session?.user?.name || 'You',
+        first_name: currentUser?.first_name || session?.user?.name || 'You',
+        last_name: '',
+        role: String(currentUser?.role || session?.user?.role || 'user').toLowerCase(),
+      },
+      isCurrentUser: true,
+      optimistic: true,
+    };
+
+    setOptimisticComments((current) => [optimisticComment, ...current]);
+    setComment('');
+
     try {
-      await commentMutation.mutateAsync({ task_id: taskId, content: comment });
-      setComment('');
+      const createdComment = await commentMutation.mutateAsync({ task_id: taskId, content: optimisticComment.content });
+      setOptimisticComments((current) =>
+        current.map((entry) => (entry.id === tempId ? createdComment : entry))
+      );
+      await utils.comments.list.invalidate({ task_id: taskId });
     } catch (error) {
+      setOptimisticComments((current) => current.filter((entry) => entry.id !== tempId));
+      setComment(optimisticComment.content);
       console.error('Failed to post comment:', error);
     }
   };
@@ -174,7 +254,7 @@ export default function TaskDetailPage() {
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Property</p>
-                    <p className="text-lg font-semibold text-gray-900">{task.property}</p>
+                    <p className="text-lg font-semibold text-gray-900">{propertyLabel}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Assigned to</p>
@@ -228,11 +308,11 @@ export default function TaskDetailPage() {
                 )}
               </div>
 
-              {/* Comments Section */}
+              {/* Discussion Section */}
               <div className="bg-white rounded-lg shadow p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Comments</h2>
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">Discussion</h2>
 
-                {/* Comment Form */}
+                {/* Discussion Form */}
                 <form onSubmit={handleCommentSubmit} className="mb-6">
                   <div className="flex gap-2">
                     <input
@@ -251,14 +331,35 @@ export default function TaskDetailPage() {
                   </div>
                 </form>
 
-                {/* Comments List */}
+                {/* Discussion List */}
                 <div className="space-y-4">
-                  {comments?.results && comments.results.length > 0 ? (
-                    comments.results.map((c: any) => (
-                      <div key={c.id} className="border-l-4 border-gray-300 pl-4">
-                        <p className="font-semibold text-gray-900">{c.author_name}</p>
-                        <p className="text-sm text-gray-500">{c.created_at}</p>
-                        <p className="text-gray-700 mt-1">{c.content}</p>
+                  {displayComments.length > 0 ? (
+                    displayComments.map((c: any) => (
+                      <div
+                        key={c.id}
+                        className={`rounded-lg border-l-4 p-4 ${
+                          c.isCurrentUser
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-gray-300 bg-gray-50'
+                        }`}
+                      >
+                        <p className={`font-semibold ${c.isCurrentUser ? 'text-blue-900' : 'text-gray-900'}`}>
+                          {formatCommentAuthor(
+                            {
+                              ...c,
+                              isCurrentUser:
+                                !!currentUserIdentifier &&
+                                ((c.author_details?.username && String(c.author_details.username) === String(currentUserIdentifier)) ||
+                                  (c.author_name && String(c.author_name) === String(currentUserIdentifier)) ||
+                                  c.isCurrentUser),
+                            },
+                            currentUser?.first_name || session?.user?.name || 'You'
+                          )};{' '}
+                          <span className={`font-normal ${c.isCurrentUser ? 'text-blue-800' : 'text-gray-700'}`}>{c.content}</span>
+                        </p>
+                        <p className={`text-sm ${c.isCurrentUser ? 'text-blue-700' : 'text-gray-500'}`}>
+                          {formatCommentTimestamp(c.created_at)}
+                        </p>
                       </div>
                     ))
                   ) : (
@@ -273,7 +374,7 @@ export default function TaskDetailPage() {
               {session?.user?.role === 'manager' && task.status === 'pending' && (
                 <div className="bg-white rounded-lg shadow p-6">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Assign Task</h3>
-                    {assignmentMessage && (
+                      {assignmentMessage && (
                       <div className="mb-4 rounded-lg bg-green-50 border border-green-200 p-3 text-sm text-green-800">
                         <div className="flex items-center justify-between gap-3">
                           <span>{assignmentMessage}</span>
@@ -287,13 +388,19 @@ export default function TaskDetailPage() {
                         </div>
                       </div>
                     )}
+                    {staffError && (
+                      <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-800 text-sm">
+                        {staffError instanceof Error ? staffError.message : 'Could not load maintenance staff.'}
+                      </div>
+                    )}
+
                     <select
                       value={selectedStaffId}
                       onChange={(e) => setSelectedStaffId(e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-blue-500 mb-4"
                     >
                       <option value="">Select staff member...</option>
-                      {maintenanceStaff.map((s: any) => {
+                      {(Array.isArray(staff) ? staff : staff?.results ?? []).map((s: any) => {
                         const fullName = [s.first_name, s.last_name].filter(Boolean).join(' ').trim();
                         const label = fullName || s.username || s.email;
 

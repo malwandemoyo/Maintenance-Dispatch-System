@@ -32,7 +32,7 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
   try {
     const hasCookie = !!opts.headers?.get("cookie");
     console.debug(`[tRPC] createTRPCContext - cookie present: ${hasCookie}`);
-  } catch (e) {
+  } catch {
     // ignore logging errors
   }
 
@@ -72,17 +72,17 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
             const text = await res.text().catch(() => '<no-body>');
             const trimmed = (cookie || '').slice(0, 200) + (cookie && cookie.length > 200 ? '...' : '');
             console.debug('[tRPC] createTRPCContext - /api/auth/me/ returned non-ok', res.status, 'cookie=', trimmed, 'body=', text);
-          } catch (e) {
+          } catch {
             console.debug('[tRPC] createTRPCContext - /api/auth/me/ returned non-ok', res.status);
           }
         }
-      } catch (e) {
-        console.debug('[tRPC] createTRPCContext - error fetching /api/auth/me/', String(e));
+      } catch {
+        console.debug('[tRPC] createTRPCContext - error fetching /api/auth/me/');
       }
     }
-  } catch (e) {
+  } catch {
     // swallow — we don't want a broken auth probe to crash the request pipeline
-    console.debug('[tRPC] createTRPCContext - unexpected error', String(e));
+    console.debug('[tRPC] createTRPCContext - unexpected error');
   }
 
   return {

@@ -70,6 +70,7 @@ class StaffProfile(models.Model):
     """Profile for maintenance staff members containing role/title information."""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='staff_profile',
                                 limit_choices_to={'role__role': 'maintenance_staff'})
+    property = models.ForeignKey('Property', on_delete=models.SET_NULL, null=True, blank=True, related_name='staff_members')
     role_title = models.CharField(max_length=100, blank=True, null=True)
     phone = models.CharField(max_length=20, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -81,6 +82,38 @@ class StaffProfile(models.Model):
 
     def __str__(self):
         return f"{self.user.first_name or self.user.username} - {self.role_title or 'Staff'}"
+
+
+class ResidentReport(models.Model):
+    """Fault report submitted by a resident for manager review and action."""
+    STATUS_CHOICES = [
+        ('new', 'New'),
+        ('acknowledged', 'Acknowledged'),
+        ('in_progress', 'In Progress'),
+        ('resolved', 'Resolved'),
+        ('closed', 'Closed'),
+    ]
+
+    title = models.CharField(max_length=255)
+    description = models.TextField()
+    property = models.ForeignKey(Property, on_delete=models.CASCADE, related_name='reports')
+    reported_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='resident_reports')
+    location = models.CharField(max_length=255, blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='new')
+    manager_notes = models.TextField(blank=True, null=True)
+    photo = models.ImageField(upload_to='report_photos/', null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    closed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Resident Report'
+        verbose_name_plural = 'Resident Reports'
+
+    def __str__(self):
+        return f"{self.title} - {self.property.name}"
 
 
 class MaintenanceTask(models.Model):
@@ -101,6 +134,7 @@ class MaintenanceTask(models.Model):
     ]
     
     property = models.ForeignKey(Property, on_delete=models.CASCADE, related_name='tasks')
+    report = models.ForeignKey(ResidentReport, on_delete=models.SET_NULL, null=True, blank=True, related_name='tasks')
     title = models.CharField(max_length=255)
     description = models.TextField()
     priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='medium')

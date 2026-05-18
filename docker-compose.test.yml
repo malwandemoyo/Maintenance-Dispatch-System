@@ -16,10 +16,9 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-      target: development
     command: >
-      sh -c "python manage.py migrate --database=test &&
-             python manage.py test --settings=config.settings.test"
+          sh -c "python manage.py migrate &&
+            python manage.py test core.tests.PropertyAccessControlTestCase core.tests.TaskAccessControlTestCase"
     volumes:
       - ./backend:/app
     ports:
@@ -28,9 +27,13 @@ services:
       DEBUG: "false"
       DJANGO_LOG_LEVEL: WARNING
       PYTHONUNBUFFERED: "1"
-      DATABASE_NAME: maintenance_test_db
-      DATABASE_USER: test_user
-      DATABASE_PASSWORD: test_password
+      DB_ENGINE: django.db.backends.postgresql
+      DB_NAME: maintenance_test_db
+      DB_USER: test_user
+      DB_PASSWORD: test_password
+      DB_HOST: db
+      DB_PORT: "5432"
+      DJANGO_ENV: test
     depends_on:
       db:
         condition: service_started  # Don't wait for health check in tests

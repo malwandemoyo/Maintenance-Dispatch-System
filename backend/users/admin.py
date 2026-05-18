@@ -2,7 +2,8 @@ from django.contrib import admin
 from users.models import UserProfile, UserActivity
 
 
-@admin.register(UserProfile)
+# @admin.register(UserProfile)
+##we disabled this so user handling is easier with django internal tings
 class UserProfileAdmin(admin.ModelAdmin):
     list_display = ['user', 'phone', 'notifications_enabled', 'email_on_task_assigned', 'created_at']
     list_filter = ['notifications_enabled', 'email_on_task_assigned', 'created_at']
@@ -25,7 +26,7 @@ class UserProfileAdmin(admin.ModelAdmin):
     )
 
 
-@admin.register(UserActivity)
+# @admin.register(UserActivity)
 class UserActivityAdmin(admin.ModelAdmin):
     list_display = ['user', 'activity_type', 'ip_address', 'created_at']
     list_filter = ['activity_type', 'created_at']

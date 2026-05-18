@@ -25,17 +25,17 @@ export function Navbar() {
           <div className="flex items-center">
             <Link href="/" className="flex items-center">
               <span className="text-2xl font-bold text-blue-600">MDS</span>
-              <span className="ml-2 text-sm text-gray-600 hidden sm:inline">Maintenance Dispatch</span>
+              <span className="ml-2 text-sm text-gray-600 hidden sm:inline">Maintenance Dispatch System</span>
             </Link>
           </div>
 
           {/* Center - Nav Links (only when user is logged in) */}
           {session?.user && (
             <div className="hidden md:flex items-center gap-8">
-              <Link href="/" className="text-gray-700 hover:text-blue-600 transition font-medium">
+              {/* <Link href="/" className="text-gray-700 hover:text-blue-600 transition font-medium">
                 Maintenance
-              </Link>
-              {session.user.role !== 'resident' && (
+              </Link> */}
+              {/* {session.user.role !== 'resident' && (
                 <Link href="/tasks" className="text-gray-700 hover:text-blue-600 transition font-medium">
                   Tasks
                 </Link>
@@ -44,14 +44,14 @@ export function Navbar() {
                 <Link href="/report-fault" className="text-gray-700 hover:text-blue-600 transition font-medium">
                   Report Fault
                 </Link>
-              )}
-              {session.user.role === 'manager' && (
+              )} */}
+              {/* {session.user.role === 'manager' && (
                 <>
                   <Link href="/properties" className="text-gray-700 hover:text-blue-600 transition font-medium">
                     Properties
                   </Link>
                 </>
-              )}
+              )} */}
             </div>
           )}
 
@@ -106,7 +106,7 @@ export function Navbar() {
                     <button
                       onClick={() => {
                         setIsOpen(false);
-                        handleLogout();
+                        void handleLogout();
                       }}
                       className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition"
                     >

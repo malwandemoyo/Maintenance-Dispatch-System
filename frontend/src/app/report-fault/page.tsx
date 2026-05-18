@@ -9,6 +9,7 @@ export default function ReportFault() {
   const router = useRouter();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [location, setLocation] = useState('');
   const [photo, setPhoto] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,9 +23,10 @@ export default function ReportFault() {
       const form = new FormData();
       form.append('title', title);
       form.append('description', description);
+      if (location.trim()) form.append('location', location.trim());
       if (photo) form.append('photo', photo);
 
-      const res = await fetch('/api/tasks/', {
+      const res = await fetch('/api/backend/api/reports/', {
         method: 'POST',
         body: form,
         credentials: 'include',
@@ -37,10 +39,10 @@ export default function ReportFault() {
         return;
       }
 
-      const data = await res.json();
+      await res.json();
       // Redirect to confirmation page
       router.push('/report-fault/confirmation');
-    } catch (err) {
+    } catch {
       setError('Unexpected error submitting report');
     } finally {
       setSubmitting(false);
@@ -59,7 +61,9 @@ export default function ReportFault() {
     <div className="min-h-screen bg-gray-50 px-4 sm:px-6 lg:px-8 py-12">
       <div className="max-w-2xl mx-auto bg-white p-8 rounded-lg shadow">
         <h1 className="text-2xl font-bold mb-4">Report Fault</h1>
-        <p className="text-sm text-gray-600 mb-4">This report will be bound to your assigned property automatically.</p>
+        <p className="text-sm text-gray-600 mb-4">
+          This report will be bound to your assigned property automatically. A manager will review it, set a status, and create tasks if needed.
+        </p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700">Title</label>
@@ -82,15 +86,25 @@ export default function ReportFault() {
             />
           </div>
 
-          <div>
+          {/* <div>
+            <label className="block text-sm font-medium text-gray-700">Location (optional)</label>
+            <input
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+              placeholder="e.g. Block B, Unit 12, kitchen sink"
+            />
+          </div> */}
+
+          {/* <div>
             <label className="block text-sm font-medium text-gray-700">Photo (optional)</label>
             <input
               type="file"
               accept="image/*"
-              onChange={(e) => setPhoto(e.target.files ? e.target.files[0] : null)}
+              onChange={(e) => setPhoto(e.target.files?.[0] ?? null)}
               className="mt-1"
             />
-          </div>
+          </div> */}
 
           {error && <p className="text-red-600">{error}</p>}
 

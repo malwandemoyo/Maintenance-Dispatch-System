@@ -19,7 +19,7 @@ function extractCSRFToken(cookie: string): string {
 // Helper function to build headers with cookie and CSRF token
 function buildHeaders(cookie: string): Record<string, string> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (cookie) headers["Cookie"] = cookie;
+  if (cookie) headers.Cookie = cookie;
   const csrf = extractCSRFToken(cookie);
   if (csrf) headers["X-CSRFToken"] = csrf;
   return headers;

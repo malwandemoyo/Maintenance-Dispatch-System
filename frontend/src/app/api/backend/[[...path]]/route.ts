@@ -1,15 +1,16 @@
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 
 const BACKEND = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 async function proxyRequest(
   req: NextRequest,
-  props: Promise<{ params: Promise<{ path?: string[] }> }>
+  props: { params?: { path?: string[] } }
 ) {
   try {
     // Extract path from params (Next.js catch-all route)
-    const { params } = await props;
-    const { path = [] } = await params;
+    const { params } = props || {};
+    const { path = [] } = params || {};
     
     // Reconstruct the full path from the catch-all array
     // Check the raw request URL (from referer or reconstruct from nextUrl)
@@ -101,44 +102,22 @@ async function proxyRequest(
   }
 }
 
-export async function GET(
-  req: NextRequest,
-  props: Promise<{ params: Promise<{ path?: string[] }> }>
-) {
+export async function GET(req: NextRequest, props: { params?: { path?: string[] } }) {
   return proxyRequest(req, props);
 }
 
-export async function POST(
-  req: NextRequest,
-  props: Promise<{ params: Promise<{ path?: string[] }> }>
-) {
+export async function POST(req: NextRequest, props: { params?: { path?: string[] } }) {
   return proxyRequest(req, props);
 }
 
-export async function PUT(
-  req: NextRequest,
-  props: Promise<{ params: Promise<{ path?: string[] }> }>
-) {
+export async function PUT(req: NextRequest, props: { params?: { path?: string[] } }) {
   return proxyRequest(req, props);
 }
 
-export async function PATCH(
-  req: NextRequest,
-  props: Promise<{ params: Promise<{ path?: string[] }> }>
-) {
+export async function DELETE(req: NextRequest, props: { params?: { path?: string[] } }) {
   return proxyRequest(req, props);
 }
 
-export async function DELETE(
-  req: NextRequest,
-  props: Promise<{ params: Promise<{ path?: string[] }> }>
-) {
-  return proxyRequest(req, props);
-}
-
-export async function HEAD(
-  req: NextRequest,
-  props: Promise<{ params: Promise<{ path?: string[] }> }>
-) {
+export async function HEAD(req: NextRequest, props: { params?: { path?: string[] } }) {
   return proxyRequest(req, props);
 }

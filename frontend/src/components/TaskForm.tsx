@@ -14,9 +14,11 @@ interface TaskFormProps {
   properties?: Array<{ id: number; name: string }>;
   staff?: Array<{ id: number; first_name: string; last_name: string; username: string; email: string }>;
   hidePriority?: boolean;
+  selectedProperty?: number | string;
+  onPropertyChange?: (value: string) => void;
 }
 
-export function TaskForm({ onSubmit, isLoading = false, properties = [], staff = [], hidePriority = false }: TaskFormProps) {
+export function TaskForm({ onSubmit, isLoading = false, properties = [], staff = [], hidePriority = false, selectedProperty, onPropertyChange }: TaskFormProps) {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -113,8 +115,11 @@ export function TaskForm({ onSubmit, isLoading = false, properties = [], staff =
             </label>
             <select
               id="property"
-              value={formData.property}
-              onChange={(e) => setFormData({ ...formData, property: e.target.value })}
+              value={selectedProperty ?? formData.property}
+              onChange={(e) => {
+                setFormData({ ...formData, property: e.target.value });
+                if (onPropertyChange) onPropertyChange(e.target.value);
+              }}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-blue-500"
             >
               <option value="">Select property...</option>

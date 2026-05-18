@@ -20,6 +20,7 @@ from rest_framework.routers import DefaultRouter
 
 from core.views import (
     UserViewSet, UserRoleViewSet, PropertyViewSet,
+    ResidentReportViewSet,
     MaintenanceTaskViewSet, TaskCommentViewSet, TaskHistoryViewSet
 )
 from users.views import AuthViewSet
@@ -30,6 +31,7 @@ router.register(r'auth', AuthViewSet, basename='auth')
 router.register(r'users', UserViewSet, basename='user')
 router.register(r'roles', UserRoleViewSet, basename='role')
 router.register(r'properties', PropertyViewSet, basename='property')
+router.register(r'reports', ResidentReportViewSet, basename='report')
 router.register(r'tasks', MaintenanceTaskViewSet, basename='task')
 router.register(r'comments', TaskCommentViewSet, basename='comment')
 router.register(r'history', TaskHistoryViewSet, basename='history')
