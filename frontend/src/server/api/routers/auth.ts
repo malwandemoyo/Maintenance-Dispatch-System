@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { createTRPCRouter, publicProcedure, protectedProcedure } from "~/server/api/trpc";
+import {
+  createTRPCRouter,
+  publicProcedure,
+  protectedProcedure,
+} from "~/server/api/trpc";
 import { signIn, signOut } from "~/auth";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -11,7 +15,7 @@ export const authRouter = createTRPCRouter({
         identifier: z.string().min(1).optional(),
         email: z.string().min(1).optional(),
         password: z.string().min(1),
-      })
+      }),
     )
     .mutation(async ({ input, ctx }) => {
       try {
@@ -29,19 +33,23 @@ export const authRouter = createTRPCRouter({
 
         // Fetch user details from Django
         const cookie = ctx?.headers?.get("cookie") ?? "";
-        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
         if (cookie) headers.Cookie = cookie;
         const response = await fetch(`${API_URL}/api/auth/me/`, {
           headers,
         });
 
         if (!response.ok) throw new Error("Failed to fetch user");
-        
+
         const userResponse = await response.json();
         const user = userResponse.user ?? userResponse;
         return { success: true, user };
       } catch (error) {
-        throw new Error(error instanceof Error ? error.message : "Login failed");
+        throw new Error(
+          error instanceof Error ? error.message : "Login failed",
+        );
       }
     }),
 
@@ -64,7 +72,9 @@ export const authRouter = createTRPCRouter({
         }
       }
 
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
       if (cookie) headers.Cookie = cookie;
       if (csrf) headers["X-CSRFToken"] = csrf;
 
@@ -88,7 +98,7 @@ export const authRouter = createTRPCRouter({
         first_name: z.string().min(1),
         last_name: z.string().min(1),
         role: z.enum(["manager", "maintenance_staff", "resident"]),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       try {
@@ -107,21 +117,25 @@ export const authRouter = createTRPCRouter({
         const user = await response.json();
         return { success: true, user };
       } catch (error) {
-        throw new Error(error instanceof Error ? error.message : "Registration failed");
+        throw new Error(
+          error instanceof Error ? error.message : "Registration failed",
+        );
       }
     }),
 
   getCurrentUser: protectedProcedure.query(async ({ ctx }) => {
     try {
-        const cookie = ctx.headers?.get("cookie") ?? "";
-        const headers: Record<string, string> = { "Content-Type": "application/json" };
-        if (cookie) headers.Cookie = cookie;
-        const response = await fetch(`${API_URL}/api/auth/me/`, {
-          headers,
-        });
+      const cookie = ctx.headers?.get("cookie") ?? "";
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (cookie) headers.Cookie = cookie;
+      const response = await fetch(`${API_URL}/api/auth/me/`, {
+        headers,
+      });
 
       if (!response.ok) return null;
-      
+
       const user = await response.json();
       return {
         id: user.id,
@@ -143,7 +157,7 @@ export const authRouter = createTRPCRouter({
         phone: z.string().optional(),
         address: z.string().optional(),
         unit_number: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ input, ctx }) => {
       try {
@@ -161,7 +175,9 @@ export const authRouter = createTRPCRouter({
           }
         }
 
-        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
         if (cookie) headers.Cookie = cookie;
         if (csrf) headers["X-CSRFToken"] = csrf;
 
@@ -177,18 +193,21 @@ export const authRouter = createTRPCRouter({
               const errorData = await response.json();
               // Extract error message from Django response
               let errorMessage = "Update failed";
-              
+
               if (errorData.detail) {
                 errorMessage = errorData.detail;
               } else {
                 const firstError = Object.values(errorData).find(
-                  (val) => val && (typeof val === 'string' || Array.isArray(val))
+                  (val) =>
+                    val && (typeof val === "string" || Array.isArray(val)),
                 );
                 if (firstError) {
-                  errorMessage = Array.isArray(firstError) ? firstError[0] : firstError as string;
+                  errorMessage = Array.isArray(firstError)
+                    ? firstError[0]
+                    : (firstError as string);
                 }
               }
-              
+
               throw new Error(errorMessage);
             } catch {
               throw new Error("Profile update failed");
@@ -196,11 +215,13 @@ export const authRouter = createTRPCRouter({
           }
           throw new Error("Profile update failed");
         }
-        
+
         const user = await response.json();
         return { success: true, user };
       } catch (error) {
-        throw new Error(error instanceof Error ? error.message : "Update failed");
+        throw new Error(
+          error instanceof Error ? error.message : "Update failed",
+        );
       }
     }),
 
@@ -210,7 +231,7 @@ export const authRouter = createTRPCRouter({
         old_password: z.string().min(1),
         new_password: z.string().min(8),
         new_password2: z.string().min(8),
-      })
+      }),
     )
     .mutation(async ({ input, ctx }) => {
       try {
@@ -228,7 +249,9 @@ export const authRouter = createTRPCRouter({
           }
         }
 
-        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
         if (cookie) headers.Cookie = cookie;
         if (csrf) headers["X-CSRFToken"] = csrf;
 
@@ -242,10 +265,10 @@ export const authRouter = createTRPCRouter({
           if (response.status === 400) {
             try {
               const errorData = await response.json();
-              
+
               // Extract error message from Django response
               let errorMessage = "Validation error";
-              
+
               // Handle field-specific errors
               if (errorData.old_password) {
                 errorMessage = Array.isArray(errorData.old_password)
@@ -255,7 +278,7 @@ export const authRouter = createTRPCRouter({
                 errorMessage = Array.isArray(errorData.new_password)
                   ? errorData.new_password[0]
                   : errorData.new_password;
-              } 
+              }
               // Handle non-field errors (raised as ValidationError with string)
               else if (errorData.non_field_errors) {
                 errorMessage = Array.isArray(errorData.non_field_errors)
@@ -265,21 +288,27 @@ export const authRouter = createTRPCRouter({
               // Handle detail field
               else if (errorData.detail) {
                 errorMessage = errorData.detail;
-              } 
+              }
               // Fallback: get first error
               else {
                 const firstError = Object.values(errorData).find(
-                  (val) => val && (typeof val === 'string' || Array.isArray(val))
+                  (val) =>
+                    val && (typeof val === "string" || Array.isArray(val)),
                 );
                 if (firstError) {
-                  errorMessage = Array.isArray(firstError) ? firstError[0] : firstError as string;
+                  errorMessage = Array.isArray(firstError)
+                    ? firstError[0]
+                    : (firstError as string);
                 }
               }
-              
+
               throw new Error(errorMessage);
             } catch (parseError) {
               // Parsing failed - return a generic message
-              if (parseError instanceof Error && parseError.message !== "Password change failed") {
+              if (
+                parseError instanceof Error &&
+                parseError.message !== "Password change failed"
+              ) {
                 throw parseError; // Re-throw if it's our custom error
               }
               throw new Error("Password change failed");
@@ -290,8 +319,9 @@ export const authRouter = createTRPCRouter({
 
         return { success: true };
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Password change failed";
-        console.error('Change password error:', message);
+        const message =
+          error instanceof Error ? error.message : "Password change failed";
+        console.error("Change password error:", message);
         throw new Error(message);
       }
     }),

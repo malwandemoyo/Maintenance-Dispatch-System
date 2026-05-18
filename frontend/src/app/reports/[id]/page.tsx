@@ -1,10 +1,10 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import Image from 'next/image';
-import { useSession } from 'next-auth/react';
-import { ProtectedRoute } from '~/components/ProtectedRoute';
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import Image from "next/image";
+import { useSession } from "next-auth/react";
+import { ProtectedRoute } from "~/components/ProtectedRoute";
 
 interface ReportDetail {
   id: number;
@@ -34,16 +34,16 @@ interface ReportDetail {
 
 function statusClasses(status: string) {
   switch (status) {
-    case 'closed':
-      return 'bg-green-100 text-green-800';
-    case 'resolved':
-      return 'bg-emerald-100 text-emerald-800';
-    case 'in_progress':
-      return 'bg-blue-100 text-blue-800';
-    case 'acknowledged':
-      return 'bg-yellow-100 text-yellow-800';
+    case "closed":
+      return "bg-green-100 text-green-800";
+    case "resolved":
+      return "bg-emerald-100 text-emerald-800";
+    case "in_progress":
+      return "bg-blue-100 text-blue-800";
+    case "acknowledged":
+      return "bg-yellow-100 text-yellow-800";
     default:
-      return 'bg-gray-100 text-gray-800';
+      return "bg-gray-100 text-gray-800";
   }
 }
 
@@ -51,15 +51,15 @@ export default function ReportDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const { data: session } = useSession();
-  const isManager = session?.user?.role === 'manager';
+  const isManager = session?.user?.role === "manager";
   const reportId = params.id;
 
   const [report, setReport] = useState<ReportDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [taskTitle, setTaskTitle] = useState('');
-  const [taskDescription, setTaskDescription] = useState('');
-  const [priority, setPriority] = useState('medium');
+  const [taskTitle, setTaskTitle] = useState("");
+  const [taskDescription, setTaskDescription] = useState("");
+  const [priority, setPriority] = useState("medium");
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -70,22 +70,26 @@ export default function ReportDetailPage() {
       try {
         setLoading(true);
         const response = await fetch(`/api/backend/api/reports/${reportId}/`, {
-          credentials: 'include',
+          credentials: "include",
         });
         const data = await response.json().catch(() => ({}));
 
         if (!response.ok) {
-          throw new Error(data.detail || 'Failed to load report');
+          throw new Error(data.detail || "Failed to load report");
         }
 
         if (isMounted) {
           setReport(data);
-          setTaskTitle(data.title || '');
-          setTaskDescription(data.description || '');
+          setTaskTitle(data.title || "");
+          setTaskDescription(data.description || "");
         }
       } catch (fetchError) {
         if (isMounted) {
-          setError(fetchError instanceof Error ? fetchError.message : 'Failed to load report');
+          setError(
+            fetchError instanceof Error
+              ? fetchError.message
+              : "Failed to load report",
+          );
         }
       } finally {
         if (isMounted) {
@@ -110,25 +114,32 @@ export default function ReportDetailPage() {
       setActionLoading(true);
       setActionError(null);
 
-      const response = await fetch(`/api/backend/api/reports/${report.id}/create_task/`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: taskTitle,
-          description: taskDescription,
-          priority,
-        }),
-      });
+      const response = await fetch(
+        `/api/backend/api/reports/${report.id}/create_task/`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: taskTitle,
+            description: taskDescription,
+            priority,
+          }),
+        },
+      );
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data.detail || 'Failed to create task');
+        throw new Error(data.detail || "Failed to create task");
       }
 
       router.push(`/tasks/${data.id}`);
     } catch (createError) {
-      setActionError(createError instanceof Error ? createError.message : 'Failed to create task');
+      setActionError(
+        createError instanceof Error
+          ? createError.message
+          : "Failed to create task",
+      );
     } finally {
       setActionLoading(false);
     }
@@ -141,19 +152,26 @@ export default function ReportDetailPage() {
       setActionLoading(true);
       setActionError(null);
 
-      const response = await fetch(`/api/backend/api/reports/${report.id}/close/`, {
-        method: 'POST',
-        credentials: 'include',
-      });
+      const response = await fetch(
+        `/api/backend/api/reports/${report.id}/close/`,
+        {
+          method: "POST",
+          credentials: "include",
+        },
+      );
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data.detail || 'Failed to close report');
+        throw new Error(data.detail || "Failed to close report");
       }
 
       setReport(data);
     } catch (closeError) {
-      setActionError(closeError instanceof Error ? closeError.message : 'Failed to close report');
+      setActionError(
+        closeError instanceof Error
+          ? closeError.message
+          : "Failed to close report",
+      );
     } finally {
       setActionLoading(false);
     }
@@ -163,10 +181,14 @@ export default function ReportDetailPage() {
     <ProtectedRoute>
       <div className="min-h-screen bg-gray-50">
         <header className="bg-white shadow">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex items-center justify-between">
+          <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-6 sm:px-6 lg:px-8">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Report Details</h1>
-              <p className="text-sm text-gray-600 mt-1">Review the report, create a task, and close it when complete.</p>
+              <h1 className="text-3xl font-bold text-gray-900">
+                Report Details
+              </h1>
+              <p className="mt-1 text-sm text-gray-600">
+                Review the report, create a task, and close it when complete.
+              </p>
             </div>
             <button
               type="button"
@@ -178,41 +200,57 @@ export default function ReportDetailPage() {
           </div>
         </header>
 
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <main className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
           {loading ? (
-            <div className="flex justify-center items-center h-64">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+            <div className="flex h-64 items-center justify-center">
+              <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-blue-600" />
             </div>
           ) : error ? (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-800">{error}</div>
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-800">
+              {error}
+            </div>
           ) : report ? (
             <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
-              <section className="bg-white rounded-lg shadow p-6 space-y-4">
+              <section className="space-y-4 rounded-lg bg-white p-6 shadow">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <h2 className="text-2xl font-semibold text-gray-900">{report.title}</h2>
-                    <p className="text-sm text-gray-500">Submitted {new Date(report.created_at).toLocaleString()}</p>
+                    <h2 className="text-2xl font-semibold text-gray-900">
+                      {report.title}
+                    </h2>
+                    <p className="text-sm text-gray-500">
+                      Submitted {new Date(report.created_at).toLocaleString()}
+                    </p>
                   </div>
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusClasses(report.status)}`}>
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs font-medium ${statusClasses(report.status)}`}
+                  >
                     {report.status}
                   </span>
                 </div>
 
-                <p className="text-gray-700 whitespace-pre-line">{report.description}</p>
+                <p className="whitespace-pre-line text-gray-700">
+                  {report.description}
+                </p>
 
-                <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                <dl className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
                   <div>
                     <dt className="font-medium text-gray-500">Property</dt>
-                    <dd className="text-gray-900">{report.property_details?.name || 'Unknown'}</dd>
+                    <dd className="text-gray-900">
+                      {report.property_details?.name || "Unknown"}
+                    </dd>
                   </div>
                   <div>
                     <dt className="font-medium text-gray-500">Location</dt>
-                    <dd className="text-gray-900">{report.location || 'Not specified'}</dd>
+                    <dd className="text-gray-900">
+                      {report.location || "Not specified"}
+                    </dd>
                   </div>
                   <div>
                     <dt className="font-medium text-gray-500">Reported By</dt>
                     <dd className="text-gray-900">
-                      {report.reported_by_details?.first_name || report.reported_by_details?.username || 'Unknown'}
+                      {report.reported_by_details?.first_name ||
+                        report.reported_by_details?.username ||
+                        "Unknown"}
                     </dd>
                   </div>
                   <div>
@@ -223,7 +261,9 @@ export default function ReportDetailPage() {
 
                 {report.photo && (
                   <div>
-                    <p className="mb-2 text-sm font-medium text-gray-500">Photo</p>
+                    <p className="mb-2 text-sm font-medium text-gray-500">
+                      Photo
+                    </p>
                     <Image
                       src={report.photo}
                       alt={report.title}
@@ -237,20 +277,30 @@ export default function ReportDetailPage() {
 
                 {report.manager_notes && (
                   <div className="rounded-lg bg-gray-50 p-4">
-                    <p className="text-sm font-medium text-gray-500 mb-1">Manager Notes</p>
-                    <p className="text-gray-700 whitespace-pre-line">{report.manager_notes}</p>
+                    <p className="mb-1 text-sm font-medium text-gray-500">
+                      Manager Notes
+                    </p>
+                    <p className="whitespace-pre-line text-gray-700">
+                      {report.manager_notes}
+                    </p>
                   </div>
                 )}
               </section>
 
-              <aside className="bg-white rounded-lg shadow p-6 space-y-4 h-fit">
+              <aside className="h-fit space-y-4 rounded-lg bg-white p-6 shadow">
                 <h3 className="text-lg font-semibold text-gray-900">Actions</h3>
-                {actionError && <div className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{actionError}</div>}
+                {actionError && (
+                  <div className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {actionError}
+                  </div>
+                )}
 
                 {isManager ? (
                   <>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Task title</label>
+                      <label className="mb-2 block text-sm font-medium text-gray-700">
+                        Task title
+                      </label>
                       <input
                         value={taskTitle}
                         onChange={(e) => setTaskTitle(e.target.value)}
@@ -258,7 +308,9 @@ export default function ReportDetailPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Task description</label>
+                      <label className="mb-2 block text-sm font-medium text-gray-700">
+                        Task description
+                      </label>
                       <textarea
                         value={taskDescription}
                         onChange={(e) => setTaskDescription(e.target.value)}
@@ -267,7 +319,9 @@ export default function ReportDetailPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Priority</label>
+                      <label className="mb-2 block text-sm font-medium text-gray-700">
+                        Priority
+                      </label>
                       <select
                         value={priority}
                         onChange={(e) => setPriority(e.target.value)}
@@ -285,7 +339,7 @@ export default function ReportDetailPage() {
                       disabled={actionLoading}
                       className="w-full rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                     >
-                      {actionLoading ? 'Creating...' : 'Create Task'}
+                      {actionLoading ? "Creating..." : "Create Task"}
                     </button>
                     <button
                       type="button"
@@ -293,11 +347,13 @@ export default function ReportDetailPage() {
                       disabled={actionLoading}
                       className="w-full rounded-lg bg-green-600 px-4 py-2 font-semibold text-white hover:bg-green-700 disabled:opacity-50"
                     >
-                      {actionLoading ? 'Saving...' : 'Close Report'}
+                      {actionLoading ? "Saving..." : "Close Report"}
                     </button>
                   </>
                 ) : (
-                  <p className="text-sm text-gray-600">Only managers can create tasks or close reports.</p>
+                  <p className="text-sm text-gray-600">
+                    Only managers can create tasks or close reports.
+                  </p>
                 )}
               </aside>
             </div>

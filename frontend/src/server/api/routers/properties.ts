@@ -18,7 +18,9 @@ function extractCSRFToken(cookie: string): string {
 
 // Helper function to build headers with cookie and CSRF token
 function buildHeaders(cookie: string): Record<string, string> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
   if (cookie) headers.Cookie = cookie;
   const csrf = extractCSRFToken(cookie);
   if (csrf) headers["X-CSRFToken"] = csrf;
@@ -31,7 +33,7 @@ export const propertiesRouter = createTRPCRouter({
       z.object({
         page: z.number().default(1),
         limit: z.number().default(20),
-      })
+      }),
     )
     .query(async ({ input, ctx }) => {
       try {
@@ -42,14 +44,19 @@ export const propertiesRouter = createTRPCRouter({
 
         const cookie = ctx.headers?.get("cookie") ?? "";
         const response = await fetch(`${API_URL}/api/properties/?${params}`, {
-          headers: { "Content-Type": "application/json", ...(cookie ? { Cookie: cookie } : {}) },
+          headers: {
+            "Content-Type": "application/json",
+            ...(cookie ? { Cookie: cookie } : {}),
+          },
         });
 
         if (!response.ok) throw new Error("Failed to fetch properties");
-        
+
         return await response.json();
       } catch (error) {
-        throw new Error(error instanceof Error ? error.message : "Failed to fetch properties");
+        throw new Error(
+          error instanceof Error ? error.message : "Failed to fetch properties",
+        );
       }
     }),
 
@@ -59,14 +66,19 @@ export const propertiesRouter = createTRPCRouter({
       try {
         const cookie = ctx.headers?.get("cookie") ?? "";
         const response = await fetch(`${API_URL}/api/properties/${input.id}/`, {
-          headers: { "Content-Type": "application/json", ...(cookie ? { Cookie: cookie } : {}) },
+          headers: {
+            "Content-Type": "application/json",
+            ...(cookie ? { Cookie: cookie } : {}),
+          },
         });
 
         if (!response.ok) throw new Error("Property not found");
-        
+
         return await response.json();
       } catch (error) {
-        throw new Error(error instanceof Error ? error.message : "Failed to fetch property");
+        throw new Error(
+          error instanceof Error ? error.message : "Failed to fetch property",
+        );
       }
     }),
 
@@ -78,7 +90,7 @@ export const propertiesRouter = createTRPCRouter({
         address: z.string().min(1),
         city: z.string().optional(),
         postal_code: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ input, ctx }) => {
       try {
@@ -93,10 +105,12 @@ export const propertiesRouter = createTRPCRouter({
           const error = await response.json();
           throw new Error(error.detail || "Failed to create property");
         }
-        
+
         return await response.json();
       } catch (error) {
-        throw new Error(error instanceof Error ? error.message : "Failed to create property");
+        throw new Error(
+          error instanceof Error ? error.message : "Failed to create property",
+        );
       }
     }),
 
@@ -109,7 +123,7 @@ export const propertiesRouter = createTRPCRouter({
         address: z.string().optional(),
         city: z.string().optional(),
         postal_code: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ input, ctx }) => {
       try {
@@ -122,10 +136,12 @@ export const propertiesRouter = createTRPCRouter({
         });
 
         if (!response.ok) throw new Error("Failed to update property");
-        
+
         return await response.json();
       } catch (error) {
-        throw new Error(error instanceof Error ? error.message : "Failed to update property");
+        throw new Error(
+          error instanceof Error ? error.message : "Failed to update property",
+        );
       }
     }),
 
@@ -141,10 +157,12 @@ export const propertiesRouter = createTRPCRouter({
         });
 
         if (!response.ok) throw new Error("Failed to delete property");
-        
+
         return { success: true };
       } catch (error) {
-        throw new Error(error instanceof Error ? error.message : "Failed to delete property");
+        throw new Error(
+          error instanceof Error ? error.message : "Failed to delete property",
+        );
       }
     }),
 });

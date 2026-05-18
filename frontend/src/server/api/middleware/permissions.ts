@@ -1,5 +1,5 @@
-import { TRPCError } from '@trpc/server';
-import { middleware } from '~/server/api/trpc';
+import { TRPCError } from "@trpc/server";
+import { middleware } from "~/server/api/trpc";
 
 /**
  * Permission middleware for tRPC
@@ -18,15 +18,15 @@ export function requireRole(...allowedRoles: string[]) {
   return middleware(({ ctx, next }) => {
     if (!ctx.session?.user?.role) {
       throw new TRPCError({
-        code: 'UNAUTHORIZED',
-        message: 'You must be logged in',
+        code: "UNAUTHORIZED",
+        message: "You must be logged in",
       });
     }
 
     if (!allowedRoles.includes(ctx.session.user.role)) {
       throw new TRPCError({
-        code: 'FORBIDDEN',
-        message: 'You do not have permission to perform this action',
+        code: "FORBIDDEN",
+        message: "You do not have permission to perform this action",
       });
     }
 
@@ -38,19 +38,19 @@ export function requireRole(...allowedRoles: string[]) {
  * Validate user is property manager
  */
 export function requirePropertyManager() {
-  return requireRole('manager');
+  return requireRole("manager");
 }
 
 /**
  * Validate user is maintenance staff
  */
 export function requireMaintenanceStaff() {
-  return requireRole('maintenance_staff');
+  return requireRole("maintenance_staff");
 }
 
 /**
  * Validate user is resident
  */
 export function requireResident() {
-  return requireRole('resident');
+  return requireRole("resident");
 }

@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 interface Property {
   id: number;
@@ -22,18 +22,21 @@ export function PropertySelector({
 }: PropertySelectorProps) {
   return (
     <div>
-      <label htmlFor="property-selector" className="block text-sm font-medium text-gray-700 mb-1">
+      <label
+        htmlFor="property-selector"
+        className="mb-1 block text-sm font-medium text-gray-700"
+      >
         Select Property
       </label>
       <select
         id="property-selector"
-        value={selectedId || ''}
+        value={selectedId || ""}
         onChange={(e) => onChange(Number(e.target.value))}
         disabled={disabled || isLoading}
-        className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md disabled:bg-gray-100 disabled:text-gray-500"
+        className="block w-full rounded-md border-gray-300 py-2 pr-10 pl-3 text-base focus:border-blue-500 focus:ring-blue-500 focus:outline-none disabled:bg-gray-100 disabled:text-gray-500 sm:text-sm"
       >
         <option value="" disabled>
-          {isLoading ? 'Loading properties...' : 'Choose a property'}
+          {isLoading ? "Loading properties..." : "Choose a property"}
         </option>
         {properties.map((property) => (
           <option key={property.id} value={property.id}>

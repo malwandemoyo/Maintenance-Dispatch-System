@@ -1,14 +1,14 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useSession } from 'next-auth/react';
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 
 export default function ReportFault() {
   const { data: session } = useSession();
   const router = useRouter();
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
   // Location and photo state removed - use form handling instead
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -20,27 +20,27 @@ export default function ReportFault() {
 
     try {
       const form = new FormData();
-      form.append('title', title);
-      form.append('description', description);
+      form.append("title", title);
+      form.append("description", description);
 
-      const res = await fetch('/api/backend/api/reports/', {
-        method: 'POST',
+      const res = await fetch("/api/backend/api/reports/", {
+        method: "POST",
         body: form,
-        credentials: 'include',
+        credentials: "include",
       });
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        setError(data.detail || 'Failed to submit fault report');
+        setError(data.detail || "Failed to submit fault report");
         setSubmitting(false);
         return;
       }
 
       await res.json();
       // Redirect to confirmation page
-      router.push('/report-fault/confirmation');
+      router.push("/report-fault/confirmation");
     } catch {
-      setError('Unexpected error submitting report');
+      setError("Unexpected error submitting report");
     } finally {
       setSubmitting(false);
     }
@@ -50,34 +50,41 @@ export default function ReportFault() {
     return <div className="p-8">You must be logged in to report a fault.</div>;
   }
 
-  if (session.user.role !== 'resident') {
-    return <div className="p-8">Only residents can create fault reports here.</div>;
+  if (session.user.role !== "resident") {
+    return (
+      <div className="p-8">Only residents can create fault reports here.</div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 px-4 sm:px-6 lg:px-8 py-12">
-      <div className="max-w-2xl mx-auto bg-white p-8 rounded-lg shadow">
-        <h1 className="text-2xl font-bold mb-4">Report Fault</h1>
-        <p className="text-sm text-gray-600 mb-4">
-          This report will be bound to your assigned property automatically. A manager will review it, set a status, and create tasks if needed.
+    <div className="min-h-screen bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-2xl rounded-lg bg-white p-8 shadow">
+        <h1 className="mb-4 text-2xl font-bold">Report Fault</h1>
+        <p className="mb-4 text-sm text-gray-600">
+          This report will be bound to your assigned property automatically. A
+          manager will review it, set a status, and create tasks if needed.
         </p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700">Title</label>
+            <label className="block text-sm font-medium text-gray-700">
+              Title
+            </label>
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+              className="mt-1 block w-full rounded-md border border-gray-300 p-2"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">Description</label>
+            <label className="block text-sm font-medium text-gray-700">
+              Description
+            </label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+              className="mt-1 block w-full rounded-md border border-gray-300 p-2"
               rows={6}
               required
             />
@@ -109,9 +116,9 @@ export default function ReportFault() {
             <button
               type="submit"
               disabled={submitting}
-              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              className="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
             >
-              {submitting ? 'Submitting...' : 'Submit Report'}
+              {submitting ? "Submitting..." : "Submit Report"}
             </button>
           </div>
         </form>

@@ -37,17 +37,28 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
   }
 
   // Build a session object exclusively from the Django session when possible.
-  let session: { user: null | { id: string; name: string | null; email?: string | null; role?: string | null } } = { user: null };
+  let session: {
+    user: null | {
+      id: string;
+      name: string | null;
+      email?: string | null;
+      role?: string | null;
+    };
+  } = { user: null };
 
   try {
     const hasCookie = !!opts.headers?.get("cookie");
     console.debug(`[tRPC] createTRPCContext - cookie present: ${hasCookie}`);
     if (hasCookie) {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const API_URL =
+        process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
       const cookie = opts.headers.get("cookie") ?? "";
       try {
         const res = await fetch(`${API_URL}/api/auth/me/`, {
-          headers: { "Content-Type": "application/json", ...(cookie ? { Cookie: cookie } : {}) },
+          headers: {
+            "Content-Type": "application/json",
+            ...(cookie ? { Cookie: cookie } : {}),
+          },
         });
 
         if (res.ok) {
@@ -62,27 +73,45 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
                 role: user.role ?? null,
               },
             };
-            console.debug('[tRPC] createTRPCContext - populated session.user from Django session');
+            console.debug(
+              "[tRPC] createTRPCContext - populated session.user from Django session",
+            );
           } else {
-            console.debug('[tRPC] createTRPCContext - /api/auth/me/ returned ok but no user payload');
+            console.debug(
+              "[tRPC] createTRPCContext - /api/auth/me/ returned ok but no user payload",
+            );
           }
         } else {
           // Improved debug: log trimmed cookie and response body to help diagnose 403
           try {
-            const text = await res.text().catch(() => '<no-body>');
-            const trimmed = (cookie || '').slice(0, 200) + (cookie && cookie.length > 200 ? '...' : '');
-            console.debug('[tRPC] createTRPCContext - /api/auth/me/ returned non-ok', res.status, 'cookie=', trimmed, 'body=', text);
+            const text = await res.text().catch(() => "<no-body>");
+            const trimmed =
+              (cookie || "").slice(0, 200) +
+              (cookie && cookie.length > 200 ? "..." : "");
+            console.debug(
+              "[tRPC] createTRPCContext - /api/auth/me/ returned non-ok",
+              res.status,
+              "cookie=",
+              trimmed,
+              "body=",
+              text,
+            );
           } catch {
-            console.debug('[tRPC] createTRPCContext - /api/auth/me/ returned non-ok', res.status);
+            console.debug(
+              "[tRPC] createTRPCContext - /api/auth/me/ returned non-ok",
+              res.status,
+            );
           }
         }
       } catch {
-        console.debug('[tRPC] createTRPCContext - error fetching /api/auth/me/');
+        console.debug(
+          "[tRPC] createTRPCContext - error fetching /api/auth/me/",
+        );
       }
     }
   } catch {
     // swallow — we don't want a broken auth probe to crash the request pipeline
-    console.debug('[tRPC] createTRPCContext - unexpected error');
+    console.debug("[tRPC] createTRPCContext - unexpected error");
   }
 
   return {

@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
+import { useState } from "react";
 
 interface TaskFormProps {
   onSubmit: (data: {
@@ -12,29 +12,43 @@ interface TaskFormProps {
   }) => Promise<void>;
   isLoading?: boolean;
   properties?: Array<{ id: number; name: string }>;
-  staff?: Array<{ id: number; first_name: string; last_name: string; username: string; email: string }>;
+  staff?: Array<{
+    id: number;
+    first_name: string;
+    last_name: string;
+    username: string;
+    email: string;
+  }>;
   hidePriority?: boolean;
   selectedProperty?: number | string;
   onPropertyChange?: (value: string) => void;
 }
 
-export function TaskForm({ onSubmit, isLoading = false, properties = [], staff = [], hidePriority = false, selectedProperty, onPropertyChange }: TaskFormProps) {
+export function TaskForm({
+  onSubmit,
+  isLoading = false,
+  properties = [],
+  staff = [],
+  hidePriority = false,
+  selectedProperty,
+  onPropertyChange,
+}: TaskFormProps) {
   const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    priority: 'medium',
-    property: properties[0]?.id || '',
-    assigned_to: '',
+    title: "",
+    description: "",
+    priority: "medium",
+    property: properties[0]?.id || "",
+    assigned_to: "",
   });
 
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError("");
 
     if (!formData.title.trim()) {
-      setError('Title is required');
+      setError("Title is required");
       return;
     }
 
@@ -43,24 +57,31 @@ export function TaskForm({ onSubmit, isLoading = false, properties = [], staff =
         title: formData.title,
         description: formData.description || undefined,
         priority: formData.priority,
-        property: formData.property ? parseInt(formData.property as string) : undefined,
-        assigned_to: formData.assigned_to ? parseInt(formData.assigned_to as string) : undefined,
+        property: formData.property
+          ? parseInt(formData.property as string)
+          : undefined,
+        assigned_to: formData.assigned_to
+          ? parseInt(formData.assigned_to as string)
+          : undefined,
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create task');
+      setError(err instanceof Error ? err.message : "Failed to create task");
     }
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4">
           <p className="text-red-800">{error}</p>
         </div>
       )}
 
       <div>
-        <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
+        <label
+          htmlFor="title"
+          className="mb-2 block text-sm font-medium text-gray-700"
+        >
           Task Title *
         </label>
         <input
@@ -69,21 +90,26 @@ export function TaskForm({ onSubmit, isLoading = false, properties = [], staff =
           value={formData.title}
           onChange={(e) => setFormData({ ...formData, title: e.target.value })}
           required
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-blue-500"
+          className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-blue-500 focus:outline-none"
           placeholder="Enter task title"
         />
       </div>
 
       <div>
-        <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-2">
+        <label
+          htmlFor="description"
+          className="mb-2 block text-sm font-medium text-gray-700"
+        >
           Description
         </label>
         <textarea
           id="description"
           value={formData.description}
-          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+          onChange={(e) =>
+            setFormData({ ...formData, description: e.target.value })
+          }
           rows={4}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-blue-500"
+          className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-blue-500 focus:outline-none"
           placeholder="Enter task description"
         />
       </div>
@@ -91,14 +117,19 @@ export function TaskForm({ onSubmit, isLoading = false, properties = [], staff =
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {!hidePriority && (
           <div>
-            <label htmlFor="priority" className="block text-sm font-medium text-gray-700 mb-2">
+            <label
+              htmlFor="priority"
+              className="mb-2 block text-sm font-medium text-gray-700"
+            >
               Priority
             </label>
             <select
               id="priority"
               value={formData.priority}
-              onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-blue-500"
+              onChange={(e) =>
+                setFormData({ ...formData, priority: e.target.value })
+              }
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-blue-500 focus:outline-none"
             >
               <option value="low">Low</option>
               <option value="medium">Medium</option>
@@ -110,7 +141,10 @@ export function TaskForm({ onSubmit, isLoading = false, properties = [], staff =
 
         {properties.length > 0 && (
           <div>
-            <label htmlFor="property" className="block text-sm font-medium text-gray-700 mb-2">
+            <label
+              htmlFor="property"
+              className="mb-2 block text-sm font-medium text-gray-700"
+            >
               Property
             </label>
             <select
@@ -120,7 +154,7 @@ export function TaskForm({ onSubmit, isLoading = false, properties = [], staff =
                 setFormData({ ...formData, property: e.target.value });
                 if (onPropertyChange) onPropertyChange(e.target.value);
               }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-blue-500"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-blue-500 focus:outline-none"
             >
               <option value="">Select property...</option>
               {properties.map((prop) => (
@@ -134,18 +168,26 @@ export function TaskForm({ onSubmit, isLoading = false, properties = [], staff =
       </div>
       {staff.length > 0 && (
         <div>
-          <label htmlFor="assigned_to" className="block text-sm font-medium text-gray-700 mb-2">
+          <label
+            htmlFor="assigned_to"
+            className="mb-2 block text-sm font-medium text-gray-700"
+          >
             Assign to staff member
           </label>
           <select
             id="assigned_to"
             value={formData.assigned_to}
-            onChange={(e) => setFormData({ ...formData, assigned_to: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-blue-500"
+            onChange={(e) =>
+              setFormData({ ...formData, assigned_to: e.target.value })
+            }
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-blue-500 focus:outline-none"
           >
             <option value="">Leave unassigned</option>
             {staff.map((member) => {
-              const fullName = [member.first_name, member.last_name].filter(Boolean).join(' ').trim();
+              const fullName = [member.first_name, member.last_name]
+                .filter(Boolean)
+                .join(" ")
+                .trim();
               const label = fullName || member.username || member.email;
 
               return (
@@ -161,9 +203,9 @@ export function TaskForm({ onSubmit, isLoading = false, properties = [], staff =
       <button
         type="submit"
         disabled={isLoading}
-        className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+        className="w-full rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white transition-colors hover:bg-blue-700 disabled:bg-gray-400"
       >
-        {isLoading ? 'Creating...' : 'Create Task'}
+        {isLoading ? "Creating..." : "Create Task"}
       </button>
     </form>
   );

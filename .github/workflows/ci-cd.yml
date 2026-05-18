@@ -71,6 +71,11 @@ jobs:
         working-directory: ./frontend
         run: pnpm format:check
 
+      - name: Auto-fix formatting with Prettier
+        if: always()
+        working-directory: ./frontend
+        run: pnpm prettier --write "**/*.{ts,tsx,js,jsx,mdx}" --cache || true
+
       - name: Build
         working-directory: ./frontend
         env:
@@ -254,7 +259,8 @@ jobs:
   # ==================== DEPLOY TO ORIGINAL PRODUCTION SERVER ====================
   deploy-production:
     needs: [build-frontend, build-backend]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Disabled for Azure-only deployment. Keep this block for SSH deployment if needed later.
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -267,11 +273,16 @@ jobs:
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          ENV_FILE: ${{ secrets.ENV_FILE }}
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H $DEPLOY_SERVER >> ~/.ssh/known_hosts 2>/dev/null
+
+          # Write the secure environment file to the runner, then copy it to the production host.
+          echo "$ENV_FILE" > /tmp/.env.production
+          scp -i ~/.ssh/deploy_key /tmp/.env.production $DEPLOY_USER@$DEPLOY_SERVER:$DEPLOY_PATH/.env.production
 
           ssh -i ~/.ssh/deploy_key $DEPLOY_USER@$DEPLOY_SERVER << 'EOF'
             set -e
@@ -330,6 +341,13 @@ jobs:
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Set Azure container app names
+        id: azure-config
+        run: |
+          echo "AZURE_BACKEND_APP_NAME=${{ secrets.AZURE_BACKEND_APP_NAME }}" >> $GITHUB_OUTPUT
+          echo "AZURE_FRONTEND_APP_NAME=${{ secrets.AZURE_FRONTEND_APP_NAME }}" >> $GITHUB_OUTPUT
+          echo "AZURE_RESOURCE_GROUP=${{ secrets.AZURE_RESOURCE_GROUP }}" >> $GITHUB_OUTPUT
 
       # FIXED: Swapped placeholder group with your actual Resource Group: bhodlumlilo-public_group
       - name: Deploy Backend to Azure Container Apps

@@ -70,7 +70,7 @@ export function TRPCReactProvider(props: { children: React.ReactNode }) {
                 : (input as Request).url
                   ? (input as Request).url
                   : input,
-              { ...(init ?? {}), credentials: "include" }
+              { ...(init ?? {}), credentials: "include" },
             ),
           headers: () => {
             const headers = new Headers();
@@ -89,10 +89,10 @@ export function TRPCReactProvider(props: { children: React.ReactNode }) {
       onError: (error: unknown) => {
         const e = error as any;
         const code = e?.data?.code ?? e?.data?.httpStatus ?? e?.message;
-        if (code === 'UNAUTHORIZED' || code === 401) {
+        if (code === "UNAUTHORIZED" || code === 401) {
           // navigate to NextAuth sign in page
-          if (typeof window !== 'undefined') {
-            window.location.href = '/api/auth/signin';
+          if (typeof window !== "undefined") {
+            window.location.href = "/api/auth/signin";
           }
         }
       },

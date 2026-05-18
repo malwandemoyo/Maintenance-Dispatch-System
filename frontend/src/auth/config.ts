@@ -16,7 +16,10 @@ declare module "next-auth" {
 
 // For server-side auth (NextAuth authorize callback), use the direct backend URL
 // In Docker, this resolves to http://backend:8000; in dev, http://localhost:8000
-const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://backend:8000";
+const BACKEND_URL =
+  process.env.BACKEND_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://backend:8000";
 
 export const authConfig = {
   trustHost: true,
@@ -60,10 +63,10 @@ export const authConfig = {
           // Return user object with role information
           // Django session cookie is automatically set by the browser and will be
           // forwarded by tRPC context for server-side requests
-          const fullName = [user.first_name, user.last_name]
-            .filter(Boolean)
-            .join(' ') || user.username;
-          
+          const fullName =
+            [user.first_name, user.last_name].filter(Boolean).join(" ") ||
+            user.username;
+
           return {
             id: String(user.id),
             email: user.email,
