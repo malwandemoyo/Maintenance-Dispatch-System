@@ -32,6 +32,12 @@ RUN python manage.py collectstatic --noinput
 # Make entrypoint executable before setting it as entrypoint
 RUN chmod +x /app/entrypoint.sh && ls -la /app/entrypoint.sh
 
-# Use entrypoint for production migrations
+# Final/production stage (kept as a named stage so CI `--target production` works)
+FROM base AS production
+
+# Ensure production env is explicit
+ENV DJANGO_ENV=production
+
+# Reuse the entrypoint and default command from the base build
 ENTRYPOINT ["/bin/bash", "/app/entrypoint.sh"]
 CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "4", "--worker-class", "sync", "--timeout", "30", "--access-logfile", "-", "--error-logfile", "-"]
