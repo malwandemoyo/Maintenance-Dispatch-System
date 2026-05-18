@@ -30,12 +30,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "pnpm"
-          cache-dependency-path: frontend/pnpm-lock.yaml
 
-      # FIXED: Swapped out Corepack to prevent the network timeout error in the runner
-      - name: Install pnpm
-        run: npm install -g pnpm@10.25.0
+      # Use Corepack (bundled with Node) to prepare/activate pnpm reliably
+      - name: Enable Corepack and prepare pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.25.0 --activate
+          pnpm --version
 
       - name: Install dependencies
         working-directory: ./frontend
