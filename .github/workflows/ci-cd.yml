@@ -18,7 +18,7 @@ env:
   BACKEND_IMAGE: ${{ github.repository }}/backend
 
 jobs:
-  # Frontend Tests
+  # ==================== FRONTEND TESTS ====================
   frontend-test:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -33,10 +33,9 @@ jobs:
           cache: "pnpm"
           cache-dependency-path: frontend/pnpm-lock.yaml
 
+      # FIXED: Swapped out Corepack to prevent the network timeout error in the runner
       - name: Install pnpm
-        run: |
-          corepack enable
-          corepack prepare pnpm@10.25.0 --activate
+        run: npm install -g pnpm@10.25.0
 
       - name: Install dependencies
         working-directory: ./frontend
@@ -75,7 +74,7 @@ jobs:
           curl -f http://localhost:3000 || (docker logs "$container_id" && exit 1)
           docker stop "$container_id"
 
-  # Backend Tests
+  # ==================== BACKEND TESTS ====================
   backend-test:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -136,10 +135,13 @@ jobs:
           python manage.py migrate
           python manage.py test
 
-  # Build Frontend Image
+  # ==================== BUILD FRONTEND IMAGE ====================
   build-frontend:
     needs: frontend-test
-    if: github.event_name == 'push' && github.ref in ('refs/heads/main', 'refs/heads/develop')
+    # FIXED: Added your current testing branch to the filter condition
+    if: |
+      github.event_name == 'push' && 
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/backend+frontend/bothend-in-sync')
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -182,10 +184,13 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # Build Backend Image
+  # ==================== BUILD BACKEND IMAGE ====================
   build-backend:
     needs: backend-test
-    if: github.event_name == 'push' && github.ref in ('refs/heads/main', 'refs/heads/develop')
+    # FIXED: Added your current testing branch to the filter condition
+    if: |
+      github.event_name == 'push' && 
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/backend+frontend/bothend-in-sync')
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -228,7 +233,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # Deploy to Production
+  # ==================== DEPLOY TO ORIGINAL PRODUCTION SERVER ====================
   deploy-production:
     needs: [build-frontend, build-backend]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -245,40 +250,26 @@ jobs:
           DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
         run: |
-          # Install SSH client
           mkdir -p ~/.ssh
           echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H $DEPLOY_SERVER >> ~/.ssh/known_hosts 2>/dev/null
 
-          # Deploy via SSH
           ssh -i ~/.ssh/deploy_key $DEPLOY_USER@$DEPLOY_SERVER << 'EOF'
             set -e
             echo "Starting deployment..."
-            
             cd ${{ secrets.DEPLOY_PATH }}
-            
-            # Pull latest code
             git fetch origin
             git checkout origin/main
-            
-            # Load environment
             if [ -f .env.production ]; then
               export $(cat .env.production | xargs)
             fi
-            
-            # Pull latest images and restart services
             docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
             docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-            
-            # Run migrations
             docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T backend python manage.py migrate
             docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T backend python manage.py collectstatic --noinput
-            
-            # Health check
             sleep 5
             docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
-            
             echo "Deployment complete!"
           EOF
 
@@ -306,9 +297,13 @@ jobs:
               body: '❌ Production deployment failed. Check logs.'
             })
 
-deploy-to-azure:
+  # ==================== DEPLOY TO AZURE CONTAINER APPS ====================
+  deploy-to-azure:
     needs: [build-frontend, build-backend]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # FIXED: Indented properly and set up to deploy when tracking your sync branch
+    if: |
+      github.event_name == 'push' && 
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/backend+frontend/bothend-in-sync')
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -316,20 +311,19 @@ deploy-to-azure:
       - name: Azure Login
         uses: azure/login@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }} # JSON credentials from Azure CLI
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # Deploy Backend Component
+      # FIXED: Swapped placeholder group with your actual Resource Group: bhodlumlilo-public_group
       - name: Deploy Backend to Azure Container Apps
         uses: azure/container-apps-deploy-action@v1
         with:
-          imageToDeploy: ghcr.io/${{ github.repository }}/backend:latest
+          imageToDeploy: ghcr.io/${{ github.repository }}/backend:backend+frontend-bothend-in-sync
           containerAppName: MyBackendApp
-          resourceGroup: MyResourceGroup
+          resourceGroup: bhodlumlilo-public_group
 
-      # Deploy Frontend Component
       - name: Deploy Frontend to Azure Container Apps
         uses: azure/container-apps-deploy-action@v1
         with:
-          imageToDeploy: ghcr.io/${{ github.repository }}/frontend:latest
+          imageToDeploy: ghcr.io/${{ github.repository }}/frontend:backend+frontend-bothend-in-sync
           containerAppName: MyFrontendApp
-          resourceGroup: MyResourceGroup
+          resourceGroup: bhodlumlilo-public_group
