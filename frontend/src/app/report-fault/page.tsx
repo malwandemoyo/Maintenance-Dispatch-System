@@ -86,7 +86,7 @@ export default function ReportFault() {
             />
           </div>
 
-          <div>
+          {/* <div>
             <label className="block text-sm font-medium text-gray-700">Location (optional)</label>
             <input
               value={location}
@@ -94,9 +94,9 @@ export default function ReportFault() {
               className="mt-1 block w-full border border-gray-300 rounded-md p-2"
               placeholder="e.g. Block B, Unit 12, kitchen sink"
             />
-          </div>
+          </div> */}
 
-          <div>
+          {/* <div>
             <label className="block text-sm font-medium text-gray-700">Photo (optional)</label>
             <input
               type="file"
@@ -104,7 +104,7 @@ export default function ReportFault() {
               onChange={(e) => setPhoto(e.target.files?.[0] ?? null)}
               className="mt-1"
             />
-          </div>
+          </div> */}
 
           {error && <p className="text-red-600">{error}</p>}
 

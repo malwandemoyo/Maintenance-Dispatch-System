@@ -62,15 +62,51 @@ def create_users():
     print("Setting up users...")
     
     users_config = get_users_config()
-    
-    # Admin (superuser)
+    create_su = should_create_superuser()
+
+    # Admin (superuser) - only auto-create when enabled by environment
     admin_config = users_config.get('admin', {})
-    if admin_config:
-        admin_user, created = _get_or_create_user(admin_config, role='admin')
-        UserProfile.objects.get_or_create(user=admin_user)
-        if created:
-            print(f"  ✓ Created admin: {admin_user.username}")
-    
+    if create_su:
+        if admin_config:
+            admin_user, created = _get_or_create_user(admin_config, role='admin')
+            # ensure flags are set for superuser
+            if not admin_user.is_superuser or not admin_user.is_staff:
+                admin_user.is_superuser = True
+                admin_user.is_staff = True
+                admin_user.save()
+            UserProfile.objects.get_or_create(user=admin_user)
+            if created:
+                print(f"  ✓ Created admin: {admin_user.username}")
+        else:
+            # fallback to environment variables if provided
+            su_username = os.getenv('DJANGO_SUPERUSER_USERNAME')
+            su_email = os.getenv('DJANGO_SUPERUSER_EMAIL')
+            su_password = os.getenv('DJANGO_SUPERUSER_PASSWORD')
+            if su_username and su_password:
+                admin_user, created = User.objects.get_or_create(
+                    username=su_username,
+                    defaults={'email': su_email or '', 'is_staff': True, 'is_superuser': True}
+                )
+                if created:
+                    admin_user.set_password(su_password)
+                    admin_user.save()
+                    print(f"  ✓ Created admin from ENV: {admin_user.username}")
+                else:
+                    # ensure flags and password are up-to-date
+                    changed = False
+                    if not admin_user.is_superuser:
+                        admin_user.is_superuser = True
+                        changed = True
+                    if not admin_user.is_staff:
+                        admin_user.is_staff = True
+                        changed = True
+                    if changed:
+                        admin_user.save()
+    else:
+        # Auto-creation disabled for this environment
+        if admin_config:
+            print("  ⚠ Superuser auto-creation disabled by environment - skipping admin creation")
+
     # Property Manager
     mgr_config = users_config.get('manager')
     if mgr_config:
@@ -78,7 +114,12 @@ def create_users():
         mgr_profile = UserProfile.objects.get_or_create(user=mgr_user)[0]
         mgr_profile.phone = mgr_config.get('phone', '')
         mgr_profile.save()
-        UserRole.objects.get_or_create(user=mgr_user, defaults={'role': 'manager'})
+        # Ensure manager has staff privileges so they can access admin pages
+        if not mgr_user.is_staff:
+            mgr_user.is_staff = True
+            mgr_user.save()
+        # Ensure the manager role exists (update if different)
+        UserRole.objects.update_or_create(user=mgr_user, defaults={'role': 'manager'})
         if created:
             print(f"  ✓ Created manager: {mgr_user.username}")
     

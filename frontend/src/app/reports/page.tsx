@@ -101,7 +101,7 @@ export default function ReportsPage() {
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           {!isManager && (
             <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-              You can view your own reports here. Managers can review all reports for their properties.
+              You can view your own reports here.
             </div>
           )}
 

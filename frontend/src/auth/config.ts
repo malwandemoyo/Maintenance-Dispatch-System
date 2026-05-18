@@ -60,10 +60,14 @@ export const authConfig = {
           // Return user object with role information
           // Django session cookie is automatically set by the browser and will be
           // forwarded by tRPC context for server-side requests
+          const fullName = [user.first_name, user.last_name]
+            .filter(Boolean)
+            .join(' ') || user.username;
+          
           return {
             id: String(user.id),
             email: user.email,
-            name: user.first_name || user.username,
+            name: fullName,
             role: user.role, // 'manager', 'maintenance_staff', or 'resident'
             image: user.avatar || null,
           };

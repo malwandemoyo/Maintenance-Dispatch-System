@@ -158,7 +158,7 @@ export default function TasksPage() {
                           </p>
                         )}
                         <div className="flex justify-between text-sm text-gray-500">
-                          <span>Property: {task.property}</span>
+                          <span>Property: {task.property_details?.name || task.property_name || 'Unknown'}</span>
                           <span>Assigned to: {formatStaffName(task.assigned_to_details)}</span>
                         </div>
                       </div>
