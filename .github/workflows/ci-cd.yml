@@ -135,102 +135,146 @@ jobs:
 
   # ==================== DEPLOY TO ORIGINAL PRODUCTION SERVER ====================
   deploy-production:
-    needs: []
-    if: |
-      github.event_name == 'workflow_dispatch' || 
-      (github.event_name == 'push' && 
-      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/backend+frontend/bothend-in-sync'))
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+  if: |
+    github.event_name == 'workflow_dispatch' || 
+    (github.event_name == 'push' && 
+    (github.ref == 'refs/heads/main' || 
+     github.ref == 'refs/heads/master' || 
+     github.ref == 'refs/heads/backend+frontend/bothend-in-sync'))
 
-    steps:
-      - name: Deploy to production server
-        env:
-          DEPLOY_SERVER: ${{ secrets.DEPLOY_SERVER }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
-          ENV_FILE: ${{ secrets.ENV_FILE }}
-          REPO_URL: https://github.com/${{ github.repository }}.git
-          DEPLOY_BRANCH: ${{ github.ref_name }}
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H $DEPLOY_SERVER >> ~/.ssh/known_hosts 2>/dev/null
+  runs-on: ubuntu-latest
+  timeout-minutes: 30
 
-          ssh -i ~/.ssh/deploy_key $DEPLOY_USER@$DEPLOY_SERVER "mkdir -p '${DEPLOY_PATH}'"
+  steps:
+    - name: Deploy to production server
+      env:
+        DEPLOY_SERVER: ${{ secrets.DEPLOY_SERVER }}
+        DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+        DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        ENV_FILE: ${{ secrets.ENV_FILE }}
+        REPO_URL: git@github.com:${{ github.repository }}.git
+        DEPLOY_BRANCH: ${{ github.ref_name }}
 
-          # Write the secure environment file to the runner, then copy it to the production host.
-          echo "Creating .env file..."
-          echo "$ENV_FILE" > /tmp/.env
-          ls -lh /tmp/.env
-          echo "DEPLOY_PATH is set to: $DEPLOY_PATH"
-          echo "Copying .env to VM at $DEPLOY_PATH/.env..."
-          scp -i ~/.ssh/deploy_key /tmp/.env $DEPLOY_USER@$DEPLOY_SERVER:$DEPLOY_PATH/.env || (echo "SCP failed!" && exit 1)
-          echo "Verifying .env on VM..."
-          ssh -i ~/.ssh/deploy_key $DEPLOY_USER@$DEPLOY_SERVER "echo 'Contents of DEPLOY_PATH:' && ls -lh '$DEPLOY_PATH' | head -15"
+      run: |
+        set -euxo pipefail
 
-          ssh -i ~/.ssh/deploy_key $DEPLOY_USER@$DEPLOY_SERVER "DEPLOY_PATH='${DEPLOY_PATH}' REPO_URL='${REPO_URL}' DEPLOY_BRANCH='${DEPLOY_BRANCH}' bash -s" << 'EOF'
-            set -e
-            set -x
-            
-            echo "Starting deployment..."
-            mkdir -p "$DEPLOY_PATH"
-            cd "$DEPLOY_PATH"
-            echo "Working directory: $(pwd)"
-            echo "Directory contents:"
-            ls -la
+        mkdir -p ~/.ssh
 
-            if [ ! -d .git ]; then
-              echo "No git repository found. Cloning $REPO_URL on branch $DEPLOY_BRANCH..."
-              git clone --branch "$DEPLOY_BRANCH" "$REPO_URL" .
-            else
-              echo "Git repository found. Updating branch $DEPLOY_BRANCH..."
-              git fetch origin "$DEPLOY_BRANCH"
-              git checkout "$DEPLOY_BRANCH" 2>/dev/null || git checkout -b "$DEPLOY_BRANCH" "origin/$DEPLOY_BRANCH"
-              git pull origin "$DEPLOY_BRANCH"
-            fi
-            
-            # Load environment variables from .env file
-            echo "Checking for .env file..."
-            if [ -f .env ]; then
-              echo "✓ .env file found at $(pwd)/.env"
-              echo "File size: $(wc -c < .env) bytes"
-              echo "First few lines (redacted):"
-              head -3 .env | sed 's/=.*/=***REDACTED***/g'
-              set -a
-              . ./.env
-              set +a
-              echo "✓ Environment loaded successfully"
-            elif [ -f .env.production ]; then
-              echo "⚠ .env not found, using .env.production as fallback"
-              cp .env.production .env
-              set -a
-              . ./.env
-              set +a
-              echo "✓ Environment loaded from .env.production"
-            else
-              echo "✗ ERROR: Neither .env nor .env.production found at $(pwd)"
-              echo "Files in current directory:"
-              ls -la
-              exit 1
-            fi
-            
-            echo "Pulling latest images..."
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
-            
-            echo "Starting containers..."
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-            
-            echo "Running migrations..."
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T backend python manage.py migrate
-            
-            echo "Collecting static files..."
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T backend python manage.py collectstatic --noinput
-            
-            sleep 5
-            echo "Container status:"
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
-            echo "✓ Deployment complete!"
-          EOF
+        echo "$DEPLOY_KEY" > ~/.ssh/deploy_key
+        chmod 600 ~/.ssh/deploy_key
+
+        ssh-keyscan -H github.com >> ~/.ssh/known_hosts
+        ssh-keyscan -H "$DEPLOY_SERVER" >> ~/.ssh/known_hosts
+
+        echo "Testing SSH connection..."
+        ssh \
+          -o BatchMode=yes \
+          -o StrictHostKeyChecking=no \
+          -i ~/.ssh/deploy_key \
+          "$DEPLOY_USER@$DEPLOY_SERVER" \
+          "echo SSH connection successful"
+
+        echo "Uploading .env file..."
+
+        echo "$ENV_FILE" > /tmp/.env
+
+        scp \
+          -o BatchMode=yes \
+          -o StrictHostKeyChecking=no \
+          -i ~/.ssh/deploy_key \
+          /tmp/.env \
+          "$DEPLOY_USER@$DEPLOY_SERVER:$DEPLOY_PATH/.env"
+
+        echo "Running remote deployment..."
+
+        ssh \
+          -tt \
+          -o BatchMode=yes \
+          -o StrictHostKeyChecking=no \
+          -i ~/.ssh/deploy_key \
+          "$DEPLOY_USER@$DEPLOY_SERVER" <<EOF
+
+          set -euxo pipefail
+
+          export DEPLOY_PATH="$DEPLOY_PATH"
+          export DEPLOY_BRANCH="$DEPLOY_BRANCH"
+          export REPO_URL="$REPO_URL"
+
+          mkdir -p "\$DEPLOY_PATH"
+
+          cd "\$DEPLOY_PATH"
+
+          echo "Current directory:"
+          pwd
+
+          if [ ! -d .git ]; then
+            echo "Cloning repository..."
+            git clone --branch "\$DEPLOY_BRANCH" "\$REPO_URL" .
+          else
+            echo "Updating repository..."
+
+            git fetch origin
+
+            git checkout "\$DEPLOY_BRANCH" || \
+            git checkout -b "\$DEPLOY_BRANCH" "origin/\$DEPLOY_BRANCH"
+
+            git pull origin "\$DEPLOY_BRANCH"
+          fi
+
+          echo "Loading environment..."
+
+          if [ ! -f .env ]; then
+            echo ".env file missing!"
+            exit 1
+          fi
+
+          set -a
+          source .env
+          set +a
+
+          echo "Docker version:"
+          docker --version
+
+          echo "Docker Compose version:"
+          docker compose version
+
+          echo "Pulling containers..."
+
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.prod.yml \
+            pull
+
+          echo "Starting containers..."
+
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.prod.yml \
+            up -d --build
+
+          echo "Waiting for backend..."
+
+          sleep 15
+
+          docker compose ps
+
+          echo "Running migrations..."
+
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.prod.yml \
+            exec -T backend \
+            python manage.py migrate
+
+          echo "Collecting static files..."
+
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.prod.yml \
+            exec -T backend \
+            python manage.py collectstatic --noinput
+
+          echo "Deployment completed successfully"
+
+        EOF
