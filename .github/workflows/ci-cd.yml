@@ -14,11 +14,6 @@ on:
       - develop
   workflow_dispatch:
 
-env:
-  REGISTRY: ghcr.io
-  FRONTEND_IMAGE: malwandemoyo/maintenance-dispatch-system/frontend
-  BACKEND_IMAGE: malwandemoyo/maintenance-dispatch-system/backend
-
 jobs:
   # ==================== FRONTEND TESTS ====================
   frontend-test:
@@ -85,20 +80,6 @@ jobs:
           NODE_ENV: production
         run: pnpm build
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build production frontend image
-        run: |
-          docker buildx build --load --target production -t frontend-test-image ./frontend
-
-      - name: Smoke test frontend production image
-        run: |
-          container_id=$(docker run -d -p 3000:3000 frontend-test-image)
-          sleep 8
-          curl -f http://localhost:3000 || (docker logs "$container_id" && exit 1)
-          docker stop "$container_id"
-
   # ==================== BACKEND TESTS ====================
   backend-test:
     runs-on: ubuntu-latest
@@ -135,14 +116,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build production backend image
-        working-directory: ./backend
-        run: |
-          docker buildx build --load --target production -t backend-test-image .
-
       - name: Run Django tests
         working-directory: ./backend
         env:
@@ -160,98 +133,6 @@ jobs:
           python manage.py migrate
           python manage.py test
 
-  # ==================== BUILD FRONTEND IMAGE ====================
-  build-frontend:
-    needs: frontend-test
-    if: |
-      !contains(github.event.head_commit.message, '[skip build]') &&
-      github.event_name == 'push' && 
-      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/backend+frontend/bothend-in-sync')
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}
-          tags: |
-            type=sha
-
-      - name: Build and push Frontend image (tag = commit SHA)
-        uses: docker/build-push-action@v5
-        with:
-          context: ./frontend
-          target: production
-          push: true
-          tags: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  # ==================== BUILD BACKEND IMAGE ====================
-  build-backend:
-    needs: backend-test
-    if: |
-      !contains(github.event.head_commit.message, '[skip build]') &&
-      github.event_name == 'push' && 
-      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/backend+frontend/bothend-in-sync')
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}
-          tags: |
-            type=sha
-
-      - name: Build and push Backend image (tag = commit SHA)
-        uses: docker/build-push-action@v5
-        with:
-          context: ./backend
-          target: production
-          push: true
-          tags: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ github.sha }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
   # ==================== DEPLOY TO ORIGINAL PRODUCTION SERVER ====================
   deploy-production:
     needs: []
@@ -263,8 +144,6 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v4
-
       - name: Deploy to production server
         env:
           DEPLOY_SERVER: ${{ secrets.DEPLOY_SERVER }}
@@ -272,6 +151,8 @@ jobs:
           DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           ENV_FILE: ${{ secrets.ENV_FILE }}
+          REPO_URL: https://github.com/${{ github.repository }}.git
+          DEPLOY_BRANCH: ${{ github.ref_name }}
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/deploy_key
@@ -284,15 +165,21 @@ jobs:
           echo "$ENV_FILE" > /tmp/.env.production
           scp -i ~/.ssh/deploy_key /tmp/.env.production $DEPLOY_USER@$DEPLOY_SERVER:$DEPLOY_PATH/.env.production
 
-          ssh -i ~/.ssh/deploy_key $DEPLOY_USER@$DEPLOY_SERVER << 'EOF'
+          ssh -i ~/.ssh/deploy_key $DEPLOY_USER@$DEPLOY_SERVER "DEPLOY_PATH='${DEPLOY_PATH}' REPO_URL='${REPO_URL}' DEPLOY_BRANCH='${DEPLOY_BRANCH}' bash -s" << 'EOF'
             set -e
             echo "Starting deployment..."
-            cd "${{ secrets.DEPLOY_PATH }}"
-            CURRENT_BRANCH=$(git branch --show-current)
-            if [ -z "$CURRENT_BRANCH" ]; then
-              CURRENT_BRANCH="main"
+            mkdir -p "$DEPLOY_PATH"
+            cd "$DEPLOY_PATH"
+
+            if [ ! -d .git ]; then
+              echo "No git repository found. Cloning $REPO_URL on branch $DEPLOY_BRANCH..."
+              git clone --branch "$DEPLOY_BRANCH" "$REPO_URL" .
+            else
+              echo "Git repository found. Updating branch $DEPLOY_BRANCH..."
+              git fetch origin "$DEPLOY_BRANCH"
+              git checkout "$DEPLOY_BRANCH" 2>/dev/null || git checkout -b "$DEPLOY_BRANCH" "origin/$DEPLOY_BRANCH"
+              git pull origin "$DEPLOY_BRANCH"
             fi
-            git pull origin "$CURRENT_BRANCH"
             if [ -f .env.production ]; then
               export $(cat .env.production | xargs)
             fi
@@ -304,270 +191,3 @@ jobs:
             docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
             echo "Deployment complete!"
           EOF
-
-
-  # ==================== DEPLOY TO AZURE CONTAINER APPS ====================
-  deploy-to-azure:
-    needs: [build-frontend, build-backend, create-azure-resources]
-    if: false
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    steps:
-      - name: Azure Login
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Normalize Azure resource names
-        id: azure-names
-        env:
-          BACKEND_APP_RAW: ${{ secrets.AZURE_BACKEND_APP_NAME }}
-          FRONTEND_APP_RAW: ${{ secrets.AZURE_FRONTEND_APP_NAME }}
-        run: |
-          set -e
-
-          normalize_name() {
-            printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9-]+/-/g; s/-+/-/g; s/^-+//; s/-+$//'
-          }
-
-          BACKEND_APP=$(normalize_name "$BACKEND_APP_RAW")
-          FRONTEND_APP=$(normalize_name "$FRONTEND_APP_RAW")
-
-          if [ -z "$BACKEND_APP" ] || [ -z "$FRONTEND_APP" ]; then
-            echo "Azure container app names cannot be empty after normalization. Check AZURE_BACKEND_APP_NAME and AZURE_FRONTEND_APP_NAME."
-            exit 1
-          fi
-
-          if [ ${#BACKEND_APP} -gt 31 ]; then BACKEND_APP=$(printf '%.31s' "$BACKEND_APP"); fi
-          if [ ${#FRONTEND_APP} -gt 31 ]; then FRONTEND_APP=$(printf '%.31s' "$FRONTEND_APP"); fi
-
-          case "$BACKEND_APP" in *[!a-z0-9]) BACKEND_APP="${BACKEND_APP%-}" ;; esac
-          case "$FRONTEND_APP" in *[!a-z0-9]) FRONTEND_APP="${FRONTEND_APP%-}" ;; esac
-
-          echo "BACKEND_APP=$BACKEND_APP" >> "$GITHUB_OUTPUT"
-          echo "FRONTEND_APP=$FRONTEND_APP" >> "$GITHUB_OUTPUT"
-
-      - name: Deploy Backend to Azure Container Apps
-        uses: azure/container-apps-deploy-action@v1
-        with:
-          imageToDeploy: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ github.sha }}
-          containerAppName: ${{ steps.azure-names.outputs.BACKEND_APP }}
-          resourceGroup: ${{ secrets.AZURE_RESOURCE_GROUP }}
-
-      - name: Deploy Frontend to Azure Container Apps
-        uses: azure/container-apps-deploy-action@v1
-        with:
-          imageToDeploy: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
-          containerAppName: ${{ steps.azure-names.outputs.FRONTEND_APP }}
-          resourceGroup: ${{ secrets.AZURE_RESOURCE_GROUP }}
-
-  # ==================== CREATE AZURE RESOURCES (if missing) ====================
-  create-azure-resources:
-    needs: [build-frontend, build-backend]
-    if: false
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Azure Login
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Normalize Azure resource names
-        id: azure-names
-        env:
-          BACKEND_APP_RAW: ${{ secrets.AZURE_BACKEND_APP_NAME }}
-          FRONTEND_APP_RAW: ${{ secrets.AZURE_FRONTEND_APP_NAME }}
-          ENV_RAW: ${{ secrets.AZURE_CONTAINERAPPS_ENV }}
-        run: |
-          set -e
-
-          normalize_name() {
-            printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9-]+/-/g; s/-+/-/g; s/^-+//; s/-+$//'
-          }
-
-          BACKEND_APP=$(normalize_name "$BACKEND_APP_RAW")
-          FRONTEND_APP=$(normalize_name "$FRONTEND_APP_RAW")
-          ENV_NAME=$(normalize_name "$ENV_RAW")
-
-          if [ -z "$BACKEND_APP" ] || [ -z "$FRONTEND_APP" ] || [ -z "$ENV_NAME" ]; then
-            echo "Azure resource names cannot be empty after normalization. Check AZURE_BACKEND_APP_NAME, AZURE_FRONTEND_APP_NAME, and AZURE_CONTAINERAPPS_ENV."
-            exit 1
-          fi
-
-          if [ ${#BACKEND_APP} -gt 31 ]; then BACKEND_APP=$(printf '%.31s' "$BACKEND_APP"); fi
-          if [ ${#FRONTEND_APP} -gt 31 ]; then FRONTEND_APP=$(printf '%.31s' "$FRONTEND_APP"); fi
-          if [ ${#ENV_NAME} -gt 31 ]; then ENV_NAME=$(printf '%.31s' "$ENV_NAME"); fi
-
-          case "$BACKEND_APP" in *[!a-z0-9]) BACKEND_APP="${BACKEND_APP%-}" ;; esac
-          case "$FRONTEND_APP" in *[!a-z0-9]) FRONTEND_APP="${FRONTEND_APP%-}" ;; esac
-          case "$ENV_NAME" in *[!a-z0-9]) ENV_NAME="${ENV_NAME%-}" ;; esac
-
-          echo "BACKEND_APP=$BACKEND_APP" >> "$GITHUB_OUTPUT"
-          echo "FRONTEND_APP=$FRONTEND_APP" >> "$GITHUB_OUTPUT"
-          echo "ENV_NAME=$ENV_NAME" >> "$GITHUB_OUTPUT"
-
-      - name: Ensure resource group exists and resolve location
-        id: rg-location
-        env:
-          RG_NAME: ${{ secrets.AZURE_RESOURCE_GROUP }}
-          RG_LOCATION_FALLBACK: ${{ secrets.AZURE_LOCATION }}
-        run: |
-          set -e
-          if [ -z "$RG_LOCATION_FALLBACK" ]; then
-            RG_LOCATION_FALLBACK="eastus"
-          fi
-
-          if az group exists --name "$RG_NAME" | grep -q true; then
-            RG_LOCATION=$(az group show --name "$RG_NAME" --query location -o tsv)
-            echo "Resource group exists in location: $RG_LOCATION"
-          else
-            echo "Resource group does not exist. Creating in: $RG_LOCATION_FALLBACK"
-            az group create --name "$RG_NAME" --location "$RG_LOCATION_FALLBACK" >/dev/null
-            RG_LOCATION="$RG_LOCATION_FALLBACK"
-          fi
-
-          echo "RG_LOCATION=$RG_LOCATION" >> "$GITHUB_OUTPUT"
-
-      - name: Register required Azure resource providers
-        run: |
-          set -e
-          echo "Registering Microsoft.OperationalInsights provider..."
-          az provider register -n Microsoft.OperationalInsights --wait
-          echo "Registering Microsoft.App provider..."
-          az provider register -n Microsoft.App --wait
-
-      - name: Ensure Log Analytics workspace exists
-        id: log-analytics
-        env:
-          RG: ${{ secrets.AZURE_RESOURCE_GROUP }}
-        run: |
-          set -e
-          LA_WORKSPACE="maintenance-dispatch-logs"
-          if ! az monitor log-analytics workspace show --workspace-name "$LA_WORKSPACE" --resource-group "$RG" >/dev/null 2>&1; then
-            echo "Creating Log Analytics workspace: $LA_WORKSPACE"
-            az monitor log-analytics workspace create --workspace-name "$LA_WORKSPACE" --resource-group "$RG" --location "${{ steps.rg-location.outputs.RG_LOCATION }}"
-          else
-            echo "Log Analytics workspace exists"
-          fi
-          LA_WORKSPACE_ID=$(az monitor log-analytics workspace show --workspace-name "$LA_WORKSPACE" --resource-group "$RG" --query id -o tsv)
-          echo "LA_WORKSPACE_ID=$LA_WORKSPACE_ID" >> "$GITHUB_OUTPUT"
-
-      - name: Ensure Container Apps environment exists
-        run: |
-          if ! az containerapp env show --name "${{ steps.azure-names.outputs.ENV_NAME }}" --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" >/dev/null 2>&1; then
-            echo "Creating Container Apps environment with Log Analytics workspace"
-            az containerapp env create \
-              --name "${{ steps.azure-names.outputs.ENV_NAME }}" \
-              --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
-              --location "${{ steps.rg-location.outputs.RG_LOCATION }}" \
-              --logs-workspace-id "${{ steps.log-analytics.outputs.LA_WORKSPACE_ID }}"
-          else
-            echo "Container Apps environment exists"
-          fi
-
-      - name: Ensure backend container app exists (create if missing)
-        env:
-          BACKEND_APP: ${{ steps.azure-names.outputs.BACKEND_APP }}
-          RG: ${{ secrets.AZURE_RESOURCE_GROUP }}
-          ENV_NAME: ${{ steps.azure-names.outputs.ENV_NAME }}
-          IMAGE: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ github.sha }}
-          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
-          GHCR_PAT: ${{ secrets.GHCR_PAT }}
-        run: |
-          if ! az containerapp show --name "$BACKEND_APP" --resource-group "$RG" >/dev/null 2>&1; then
-            echo "Creating backend container app $BACKEND_APP"
-            if [ -n "$GHCR_USERNAME" ] && [ -n "$GHCR_PAT" ]; then
-              az containerapp create --name "$BACKEND_APP" --resource-group "$RG" --environment "$ENV_NAME" --image "$IMAGE" --ingress external --target-port 8000 --registry-server ghcr.io --registry-username "$GHCR_USERNAME" --registry-password "$GHCR_PAT"
-            else
-              az containerapp create --name "$BACKEND_APP" --resource-group "$RG" --environment "$ENV_NAME" --image "$IMAGE" --ingress external --target-port 8000
-            fi
-          else
-            echo "Backend app exists, skipping create"
-          fi
-
-      - name: Ensure frontend container app exists (create if missing)
-        env:
-          FRONTEND_APP: ${{ steps.azure-names.outputs.FRONTEND_APP }}
-          RG: ${{ secrets.AZURE_RESOURCE_GROUP }}
-          ENV_NAME: ${{ steps.azure-names.outputs.ENV_NAME }}
-          IMAGE: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
-          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
-          GHCR_PAT: ${{ secrets.GHCR_PAT }}
-        run: |
-          if ! az containerapp show --name "$FRONTEND_APP" --resource-group "$RG" >/dev/null 2>&1; then
-            echo "Creating frontend container app $FRONTEND_APP"
-            if [ -n "$GHCR_USERNAME" ] && [ -n "$GHCR_PAT" ]; then
-              az containerapp create --name "$FRONTEND_APP" --resource-group "$RG" --environment "$ENV_NAME" --image "$IMAGE" --ingress external --target-port 3000 --registry-server ghcr.io --registry-username "$GHCR_USERNAME" --registry-password "$GHCR_PAT"
-            else
-              az containerapp create --name "$FRONTEND_APP" --resource-group "$RG" --environment "$ENV_NAME" --image "$IMAGE" --ingress external --target-port 3000
-            fi
-          else
-            echo "Frontend app exists, skipping create"
-          fi
-
-      - name: Configure backend environment variables
-        env:
-          BACKEND_APP: ${{ steps.azure-names.outputs.BACKEND_APP }}
-          RG: ${{ secrets.AZURE_RESOURCE_GROUP }}
-        run: |
-          az containerapp update \
-            --name "$BACKEND_APP" \
-            --resource-group "$RG" \
-            --set-env-vars \
-              DJANGO_ENV=production \
-              DEBUG=false \
-              SECRET_KEY="${{ secrets.SECRET_KEY }}" \
-              FRONTEND_DOMAIN="${{ secrets.FRONTEND_DOMAIN }}" \
-              BACKEND_DOMAIN="${{ secrets.BACKEND_DOMAIN }}" \
-              FRONTEND_URL="${{ secrets.FRONTEND_URL }}" \
-              BACKEND_URL="${{ secrets.BACKEND_URL }}" \
-              ALLOWED_HOSTS="${{ secrets.ALLOWED_HOSTS }}" \
-              DB_ENGINE=django.db.backends.postgresql \
-              DB_NAME="${{ secrets.DB_NAME }}" \
-              DB_USER="${{ secrets.DB_USER }}" \
-              DB_PASSWORD="${{ secrets.DB_PASSWORD }}" \
-              DB_HOST="${{ secrets.DB_HOST }}" \
-              DB_PORT="${{ secrets.DB_PORT }}" \
-              TIME_ZONE=Africa/Harare \
-              AUTH_SECRET="${{ secrets.AUTH_SECRET }}" \
-              NEXT_PUBLIC_API_URL="${{ secrets.BACKEND_URL }}" \
-              PRODUCTION_API_URL="${{ secrets.BACKEND_URL }}" \
-              EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend \
-              EMAIL_HOST="${{ secrets.EMAIL_HOST }}" \
-              EMAIL_PORT="${{ secrets.EMAIL_PORT }}" \
-              EMAIL_USE_TLS=true \
-              EMAIL_HOST_USER="${{ secrets.EMAIL_HOST_USER }}" \
-              EMAIL_HOST_PASSWORD="${{ secrets.EMAIL_HOST_PASSWORD }}" \
-              DEFAULT_FROM_EMAIL="${{ secrets.DEFAULT_FROM_EMAIL }}" \
-              AUTO_CREATE_SUPERUSER=false \
-              DJANGO_LOG_LEVEL=WARNING \
-              SESSION_COOKIE_SECURE=true \
-              CSRF_COOKIE_SECURE=true \
-              PYTHONUNBUFFERED=1
-
-      - name: Configure frontend environment variables
-        env:
-          FRONTEND_APP: ${{ steps.azure-names.outputs.FRONTEND_APP }}
-          RG: ${{ secrets.AZURE_RESOURCE_GROUP }}
-        run: |
-          az containerapp update \
-            --name "$FRONTEND_APP" \
-            --resource-group "$RG" \
-            --set-env-vars \
-              NODE_ENV=production \
-              NEXT_PUBLIC_API_URL="${{ secrets.BACKEND_URL }}" \
-              FRONTEND_DOMAIN="${{ secrets.FRONTEND_DOMAIN }}" \
-              AUTH_SECRET="${{ secrets.AUTH_SECRET }}"
-
-      - name: Set Azure container app names
-        id: azure-config
-        run: |
-          echo "AZURE_BACKEND_APP_NAME=${{ secrets.AZURE_BACKEND_APP_NAME }}" >> $GITHUB_OUTPUT
-          echo "AZURE_FRONTEND_APP_NAME=${{ secrets.AZURE_FRONTEND_APP_NAME }}" >> $GITHUB_OUTPUT
-          echo "AZURE_RESOURCE_GROUP=${{ secrets.AZURE_RESOURCE_GROUP }}" >> $GITHUB_OUTPUT
