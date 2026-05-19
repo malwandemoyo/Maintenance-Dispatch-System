@@ -278,6 +278,8 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H $DEPLOY_SERVER >> ~/.ssh/known_hosts 2>/dev/null
 
+          ssh -i ~/.ssh/deploy_key $DEPLOY_USER@$DEPLOY_SERVER "mkdir -p '${DEPLOY_PATH}'"
+
           # Write the secure environment file to the runner, then copy it to the production host.
           echo "$ENV_FILE" > /tmp/.env.production
           scp -i ~/.ssh/deploy_key /tmp/.env.production $DEPLOY_USER@$DEPLOY_SERVER:$DEPLOY_PATH/.env.production
