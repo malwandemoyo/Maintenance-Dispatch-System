@@ -16,8 +16,8 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  FRONTEND_IMAGE: ${{ github.repository }}/frontend
-  BACKEND_IMAGE: ${{ github.repository }}/backend
+  FRONTEND_IMAGE: malwandemoyo/maintenance-dispatch-system/frontend
+  BACKEND_IMAGE: malwandemoyo/maintenance-dispatch-system/backend
 
 jobs:
   # ==================== FRONTEND TESTS ====================
@@ -324,7 +324,7 @@ jobs:
 
   # ==================== DEPLOY TO AZURE CONTAINER APPS ====================
   deploy-to-azure:
-    needs: [build-frontend, build-backend]
+    needs: [build-frontend, build-backend, create-azure-resources]
     # FIXED: Indented properly and set up to deploy when tracking your sync branch
     if: |
       github.event_name == 'push' && 
@@ -337,6 +337,27 @@ jobs:
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Set Azure container app names
+        id: azure-config
+        run: |
+          echo "AZURE_BACKEND_APP_NAME=${{ secrets.AZURE_BACKEND_APP_NAME }}" >> $GITHUB_OUTPUT
+          echo "AZURE_FRONTEND_APP_NAME=${{ secrets.AZURE_FRONTEND_APP_NAME }}" >> $GITHUB_OUTPUT
+          echo "AZURE_RESOURCE_GROUP=${{ secrets.AZURE_RESOURCE_GROUP }}" >> $GITHUB_OUTPUT
+
+      - name: Deploy Backend to Azure Container Apps
+        uses: azure/container-apps-deploy-action@v1
+        with:
+          imageToDeploy: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+          containerAppName: ${{ steps.azure-config.outputs.AZURE_BACKEND_APP_NAME }}
+          resourceGroup: ${{ steps.azure-config.outputs.AZURE_RESOURCE_GROUP }}
+
+      - name: Deploy Frontend to Azure Container Apps
+        uses: azure/container-apps-deploy-action@v1
+        with:
+          imageToDeploy: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+          containerAppName: ${{ steps.azure-config.outputs.AZURE_FRONTEND_APP_NAME }}
+          resourceGroup: ${{ steps.azure-config.outputs.AZURE_RESOURCE_GROUP }}
 
   # ==================== CREATE AZURE RESOURCES (if missing) ====================
   create-azure-resources:
