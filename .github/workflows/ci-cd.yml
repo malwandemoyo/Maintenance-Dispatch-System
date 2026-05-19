@@ -377,14 +377,32 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Ensure resource group exists
+      - name: Ensure resource group exists and resolve location
+        id: rg-location
+        env:
+          RG_NAME: ${{ secrets.AZURE_RESOURCE_GROUP }}
+          RG_LOCATION_FALLBACK: ${{ secrets.AZURE_LOCATION }}
         run: |
-          az group create --name "${{ secrets.AZURE_RESOURCE_GROUP }}" --location eastus
+          set -e
+          if [ -z "$RG_LOCATION_FALLBACK" ]; then
+            RG_LOCATION_FALLBACK="eastus"
+          fi
+
+          if az group exists --name "$RG_NAME" | grep -q true; then
+            RG_LOCATION=$(az group show --name "$RG_NAME" --query location -o tsv)
+            echo "Resource group exists in location: $RG_LOCATION"
+          else
+            echo "Resource group does not exist. Creating in: $RG_LOCATION_FALLBACK"
+            az group create --name "$RG_NAME" --location "$RG_LOCATION_FALLBACK" >/dev/null
+            RG_LOCATION="$RG_LOCATION_FALLBACK"
+          fi
+
+          echo "RG_LOCATION=$RG_LOCATION" >> "$GITHUB_OUTPUT"
 
       - name: Ensure Container Apps environment exists
         run: |
           if ! az containerapp env show --name "${{ secrets.AZURE_CONTAINERAPPS_ENV }}" --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" >/dev/null 2>&1; then
-            az containerapp env create --name "${{ secrets.AZURE_CONTAINERAPPS_ENV }}" --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" --location eastus
+            az containerapp env create --name "${{ secrets.AZURE_CONTAINERAPPS_ENV }}" --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" --location "${{ steps.rg-location.outputs.RG_LOCATION }}"
           else
             echo "Container Apps environment exists"
           fi
