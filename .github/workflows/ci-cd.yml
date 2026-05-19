@@ -285,9 +285,12 @@ jobs:
           ssh -i ~/.ssh/deploy_key $DEPLOY_USER@$DEPLOY_SERVER << 'EOF'
             set -e
             echo "Starting deployment..."
-            cd ${{ secrets.DEPLOY_PATH }}
-            git fetch origin
-            git checkout origin/main
+            cd "${{ secrets.DEPLOY_PATH }}"
+            CURRENT_BRANCH=$(git branch --show-current)
+            if [ -z "$CURRENT_BRANCH" ]; then
+              CURRENT_BRANCH="main"
+            fi
+            git pull origin "$CURRENT_BRANCH"
             if [ -f .env.production ]; then
               export $(cat .env.production | xargs)
             fi
