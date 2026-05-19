@@ -299,29 +299,6 @@ jobs:
             echo "Deployment complete!"
           EOF
 
-      - name: Notify deployment success
-        if: success()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: '✅ Production deployment successful! Images: Frontend & Backend'
-            })
-
-      - name: Notify deployment failure
-        if: failure()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: '❌ Production deployment failed. Check logs.'
-            })
 
   # ==================== DEPLOY TO AZURE CONTAINER APPS ====================
   deploy-to-azure:
