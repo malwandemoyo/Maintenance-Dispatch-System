@@ -135,7 +135,7 @@ jobs:
 
   # ==================== DEPLOY TO ORIGINAL PRODUCTION SERVER ====================
   deploy-production:
-    needs: []
+    needs: [frontend-test, backend-test]
     if: |
       github.event_name == 'workflow_dispatch' || 
       (github.event_name == 'push' && 
@@ -181,7 +181,9 @@ jobs:
               git pull origin "$DEPLOY_BRANCH"
             fi
             if [ -f .env.production ]; then
-              export $(cat .env.production | xargs)
+              set -a
+              . ./.env.production
+              set +a
             fi
             docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
             docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
