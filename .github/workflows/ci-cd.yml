@@ -4,11 +4,13 @@ on:
   push:
     branches:
       - main
+      - master
       - develop
       - backend+frontend/bothend-in-sync
   pull_request:
     branches:
       - main
+      - master
       - develop
   workflow_dispatch:
 
@@ -164,7 +166,7 @@ jobs:
     # FIXED: Added your current testing branch to the filter condition
     if: |
       github.event_name == 'push' && 
-      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/backend+frontend/bothend-in-sync')
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/backend+frontend/bothend-in-sync')
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -191,18 +193,15 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}
           tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
             type=sha
 
-      - name: Build and push Frontend image
+      - name: Build and push Frontend image (tag = commit SHA)
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
           target: production
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -213,7 +212,7 @@ jobs:
     # FIXED: Added your current testing branch to the filter condition
     if: |
       github.event_name == 'push' && 
-      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/backend+frontend/bothend-in-sync')
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/backend+frontend/bothend-in-sync')
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -240,18 +239,15 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}
           tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
             type=sha
 
-      - name: Build and push Backend image
+      - name: Build and push Backend image (tag = commit SHA)
         uses: docker/build-push-action@v5
         with:
           context: ./backend
           target: production
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ github.sha }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -332,7 +328,7 @@ jobs:
     # FIXED: Indented properly and set up to deploy when tracking your sync branch
     if: |
       github.event_name == 'push' && 
-      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/backend+frontend/bothend-in-sync')
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/backend+frontend/bothend-in-sync')
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -342,24 +338,93 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+  # ==================== CREATE AZURE RESOURCES (if missing) ====================
+  create-azure-resources:
+    needs: [build-frontend, build-backend]
+    if: |
+      github.event_name == 'push' && 
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/backend+frontend/bothend-in-sync')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Ensure resource group exists
+        run: |
+          az group create --name "${{ secrets.AZURE_RESOURCE_GROUP }}" --location eastus
+
+      - name: Ensure Container Apps environment exists
+        run: |
+          if ! az containerapp env show --name "${{ secrets.AZURE_CONTAINERAPPS_ENV }}" --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" >/dev/null 2>&1; then
+            az containerapp env create --name "${{ secrets.AZURE_CONTAINERAPPS_ENV }}" --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" --location eastus
+          else
+            echo "Container Apps environment exists"
+          fi
+
+      - name: Ensure backend container app exists (create if missing)
+        env:
+          BACKEND_APP: ${{ secrets.AZURE_BACKEND_APP_NAME }}
+          RG: ${{ secrets.AZURE_RESOURCE_GROUP }}
+          ENV_NAME: ${{ secrets.AZURE_CONTAINERAPPS_ENV }}
+          IMAGE: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_PAT: ${{ secrets.GHCR_PAT }}
+        run: |
+          if ! az containerapp show --name "$BACKEND_APP" --resource-group "$RG" >/dev/null 2>&1; then
+            echo "Creating backend container app $BACKEND_APP"
+            if [ -n "$GHCR_USERNAME" ] && [ -n "$GHCR_PAT" ]; then
+              az containerapp create --name "$BACKEND_APP" --resource-group "$RG" --environment "$ENV_NAME" --image "$IMAGE" --ingress external --target-port 8000 --registry-server ghcr.io --registry-username "$GHCR_USERNAME" --registry-password "$GHCR_PAT"
+            else
+              az containerapp create --name "$BACKEND_APP" --resource-group "$RG" --environment "$ENV_NAME" --image "$IMAGE" --ingress external --target-port 8000
+            fi
+          else
+            echo "Backend app exists, skipping create"
+          fi
+
+      - name: Ensure frontend container app exists (create if missing)
+        env:
+          FRONTEND_APP: ${{ secrets.AZURE_FRONTEND_APP_NAME }}
+          RG: ${{ secrets.AZURE_RESOURCE_GROUP }}
+          ENV_NAME: ${{ secrets.AZURE_CONTAINERAPPS_ENV }}
+          IMAGE: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_PAT: ${{ secrets.GHCR_PAT }}
+        run: |
+          if ! az containerapp show --name "$FRONTEND_APP" --resource-group "$RG" >/dev/null 2>&1; then
+            echo "Creating frontend container app $FRONTEND_APP"
+            if [ -n "$GHCR_USERNAME" ] && [ -n "$GHCR_PAT" ]; then
+              az containerapp create --name "$FRONTEND_APP" --resource-group "$RG" --environment "$ENV_NAME" --image "$IMAGE" --ingress external --target-port 3000 --registry-server ghcr.io --registry-username "$GHCR_USERNAME" --registry-password "$GHCR_PAT"
+            else
+              az containerapp create --name "$FRONTEND_APP" --resource-group "$RG" --environment "$ENV_NAME" --image "$IMAGE" --ingress external --target-port 3000
+            fi
+          else
+            echo "Frontend app exists, skipping create"
+          fi
+
       - name: Set Azure container app names
         id: azure-config
         run: |
           echo "AZURE_BACKEND_APP_NAME=${{ secrets.AZURE_BACKEND_APP_NAME }}" >> $GITHUB_OUTPUT
           echo "AZURE_FRONTEND_APP_NAME=${{ secrets.AZURE_FRONTEND_APP_NAME }}" >> $GITHUB_OUTPUT
           echo "AZURE_RESOURCE_GROUP=${{ secrets.AZURE_RESOURCE_GROUP }}" >> $GITHUB_OUTPUT
-
-      # FIXED: Swapped placeholder group with your actual Resource Group: bhodlumlilo-public_group
+      # Deploy backend/frontend images (use commit SHA tags produced by build jobs)
       - name: Deploy Backend to Azure Container Apps
         uses: azure/container-apps-deploy-action@v1
         with:
-          imageToDeploy: ghcr.io/${{ github.repository }}/backend:backend+frontend-bothend-in-sync
-          containerAppName: MyBackendApp
-          resourceGroup: bhodlumlilo-public_group
+          imageToDeploy: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+          containerAppName: ${{ steps.azure-config.outputs.AZURE_BACKEND_APP_NAME }}
+          resourceGroup: ${{ steps.azure-config.outputs.AZURE_RESOURCE_GROUP }}
 
       - name: Deploy Frontend to Azure Container Apps
         uses: azure/container-apps-deploy-action@v1
         with:
-          imageToDeploy: ghcr.io/${{ github.repository }}/frontend:backend+frontend-bothend-in-sync
-          containerAppName: MyFrontendApp
-          resourceGroup: bhodlumlilo-public_group
+          imageToDeploy: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+          containerAppName: ${{ steps.azure-config.outputs.AZURE_FRONTEND_APP_NAME }}
+          resourceGroup: ${{ steps.azure-config.outputs.AZURE_RESOURCE_GROUP }}
