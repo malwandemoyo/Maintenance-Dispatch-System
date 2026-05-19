@@ -162,8 +162,8 @@ jobs:
           ssh -i ~/.ssh/deploy_key $DEPLOY_USER@$DEPLOY_SERVER "mkdir -p '${DEPLOY_PATH}'"
 
           # Write the secure environment file to the runner, then copy it to the production host.
-          echo "$ENV_FILE" > /tmp/.env.production
-          scp -i ~/.ssh/deploy_key /tmp/.env.production $DEPLOY_USER@$DEPLOY_SERVER:$DEPLOY_PATH/.env.production
+          echo "$ENV_FILE" > /tmp/.env
+          scp -i ~/.ssh/deploy_key /tmp/.env $DEPLOY_USER@$DEPLOY_SERVER:$DEPLOY_PATH/.env
 
           ssh -i ~/.ssh/deploy_key $DEPLOY_USER@$DEPLOY_SERVER "DEPLOY_PATH='${DEPLOY_PATH}' REPO_URL='${REPO_URL}' DEPLOY_BRANCH='${DEPLOY_BRANCH}' bash -s" << 'EOF'
             set -e
@@ -180,9 +180,9 @@ jobs:
               git checkout "$DEPLOY_BRANCH" 2>/dev/null || git checkout -b "$DEPLOY_BRANCH" "origin/$DEPLOY_BRANCH"
               git pull origin "$DEPLOY_BRANCH"
             fi
-            if [ -f .env.production ]; then
+            if [ -f .env ]; then
               set -a
-              . ./.env.production
+              . ./.env
               set +a
             fi
             docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
