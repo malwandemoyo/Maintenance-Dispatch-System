@@ -338,26 +338,48 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Set Azure container app names
-        id: azure-config
+      - name: Normalize Azure resource names
+        id: azure-names
+        env:
+          BACKEND_APP_RAW: ${{ secrets.AZURE_BACKEND_APP_NAME }}
+          FRONTEND_APP_RAW: ${{ secrets.AZURE_FRONTEND_APP_NAME }}
         run: |
-          echo "AZURE_BACKEND_APP_NAME=${{ secrets.AZURE_BACKEND_APP_NAME }}" >> $GITHUB_OUTPUT
-          echo "AZURE_FRONTEND_APP_NAME=${{ secrets.AZURE_FRONTEND_APP_NAME }}" >> $GITHUB_OUTPUT
-          echo "AZURE_RESOURCE_GROUP=${{ secrets.AZURE_RESOURCE_GROUP }}" >> $GITHUB_OUTPUT
+          set -e
+
+          normalize_name() {
+            printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9-]+/-/g; s/-+/-/g; s/^-+//; s/-+$//'
+          }
+
+          BACKEND_APP=$(normalize_name "$BACKEND_APP_RAW")
+          FRONTEND_APP=$(normalize_name "$FRONTEND_APP_RAW")
+
+          if [ -z "$BACKEND_APP" ] || [ -z "$FRONTEND_APP" ]; then
+            echo "Azure container app names cannot be empty after normalization. Check AZURE_BACKEND_APP_NAME and AZURE_FRONTEND_APP_NAME."
+            exit 1
+          fi
+
+          if [ ${#BACKEND_APP} -gt 31 ]; then BACKEND_APP=$(printf '%.31s' "$BACKEND_APP"); fi
+          if [ ${#FRONTEND_APP} -gt 31 ]; then FRONTEND_APP=$(printf '%.31s' "$FRONTEND_APP"); fi
+
+          case "$BACKEND_APP" in *[!a-z0-9]) BACKEND_APP="${BACKEND_APP%-}" ;; esac
+          case "$FRONTEND_APP" in *[!a-z0-9]) FRONTEND_APP="${FRONTEND_APP%-}" ;; esac
+
+          echo "BACKEND_APP=$BACKEND_APP" >> "$GITHUB_OUTPUT"
+          echo "FRONTEND_APP=$FRONTEND_APP" >> "$GITHUB_OUTPUT"
 
       - name: Deploy Backend to Azure Container Apps
         uses: azure/container-apps-deploy-action@v1
         with:
           imageToDeploy: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ github.sha }}
-          containerAppName: ${{ steps.azure-config.outputs.AZURE_BACKEND_APP_NAME }}
-          resourceGroup: ${{ steps.azure-config.outputs.AZURE_RESOURCE_GROUP }}
+          containerAppName: ${{ steps.azure-names.outputs.BACKEND_APP }}
+          resourceGroup: ${{ secrets.AZURE_RESOURCE_GROUP }}
 
       - name: Deploy Frontend to Azure Container Apps
         uses: azure/container-apps-deploy-action@v1
         with:
           imageToDeploy: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
-          containerAppName: ${{ steps.azure-config.outputs.AZURE_FRONTEND_APP_NAME }}
-          resourceGroup: ${{ steps.azure-config.outputs.AZURE_RESOURCE_GROUP }}
+          containerAppName: ${{ steps.azure-names.outputs.FRONTEND_APP }}
+          resourceGroup: ${{ secrets.AZURE_RESOURCE_GROUP }}
 
   # ==================== CREATE AZURE RESOURCES (if missing) ====================
   create-azure-resources:
@@ -376,6 +398,40 @@ jobs:
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Normalize Azure resource names
+        id: azure-names
+        env:
+          BACKEND_APP_RAW: ${{ secrets.AZURE_BACKEND_APP_NAME }}
+          FRONTEND_APP_RAW: ${{ secrets.AZURE_FRONTEND_APP_NAME }}
+          ENV_RAW: ${{ secrets.AZURE_CONTAINERAPPS_ENV }}
+        run: |
+          set -e
+
+          normalize_name() {
+            printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9-]+/-/g; s/-+/-/g; s/^-+//; s/-+$//'
+          }
+
+          BACKEND_APP=$(normalize_name "$BACKEND_APP_RAW")
+          FRONTEND_APP=$(normalize_name "$FRONTEND_APP_RAW")
+          ENV_NAME=$(normalize_name "$ENV_RAW")
+
+          if [ -z "$BACKEND_APP" ] || [ -z "$FRONTEND_APP" ] || [ -z "$ENV_NAME" ]; then
+            echo "Azure resource names cannot be empty after normalization. Check AZURE_BACKEND_APP_NAME, AZURE_FRONTEND_APP_NAME, and AZURE_CONTAINERAPPS_ENV."
+            exit 1
+          fi
+
+          if [ ${#BACKEND_APP} -gt 31 ]; then BACKEND_APP=$(printf '%.31s' "$BACKEND_APP"); fi
+          if [ ${#FRONTEND_APP} -gt 31 ]; then FRONTEND_APP=$(printf '%.31s' "$FRONTEND_APP"); fi
+          if [ ${#ENV_NAME} -gt 31 ]; then ENV_NAME=$(printf '%.31s' "$ENV_NAME"); fi
+
+          case "$BACKEND_APP" in *[!a-z0-9]) BACKEND_APP="${BACKEND_APP%-}" ;; esac
+          case "$FRONTEND_APP" in *[!a-z0-9]) FRONTEND_APP="${FRONTEND_APP%-}" ;; esac
+          case "$ENV_NAME" in *[!a-z0-9]) ENV_NAME="${ENV_NAME%-}" ;; esac
+
+          echo "BACKEND_APP=$BACKEND_APP" >> "$GITHUB_OUTPUT"
+          echo "FRONTEND_APP=$FRONTEND_APP" >> "$GITHUB_OUTPUT"
+          echo "ENV_NAME=$ENV_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Ensure resource group exists and resolve location
         id: rg-location
@@ -401,17 +457,17 @@ jobs:
 
       - name: Ensure Container Apps environment exists
         run: |
-          if ! az containerapp env show --name "${{ secrets.AZURE_CONTAINERAPPS_ENV }}" --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" >/dev/null 2>&1; then
-            az containerapp env create --name "${{ secrets.AZURE_CONTAINERAPPS_ENV }}" --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" --location "${{ steps.rg-location.outputs.RG_LOCATION }}"
+          if ! az containerapp env show --name "${{ steps.azure-names.outputs.ENV_NAME }}" --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" >/dev/null 2>&1; then
+            az containerapp env create --name "${{ steps.azure-names.outputs.ENV_NAME }}" --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" --location "${{ steps.rg-location.outputs.RG_LOCATION }}"
           else
             echo "Container Apps environment exists"
           fi
 
       - name: Ensure backend container app exists (create if missing)
         env:
-          BACKEND_APP: ${{ secrets.AZURE_BACKEND_APP_NAME }}
+          BACKEND_APP: ${{ steps.azure-names.outputs.BACKEND_APP }}
           RG: ${{ secrets.AZURE_RESOURCE_GROUP }}
-          ENV_NAME: ${{ secrets.AZURE_CONTAINERAPPS_ENV }}
+          ENV_NAME: ${{ steps.azure-names.outputs.ENV_NAME }}
           IMAGE: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ github.sha }}
           GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
           GHCR_PAT: ${{ secrets.GHCR_PAT }}
@@ -429,9 +485,9 @@ jobs:
 
       - name: Ensure frontend container app exists (create if missing)
         env:
-          FRONTEND_APP: ${{ secrets.AZURE_FRONTEND_APP_NAME }}
+          FRONTEND_APP: ${{ steps.azure-names.outputs.FRONTEND_APP }}
           RG: ${{ secrets.AZURE_RESOURCE_GROUP }}
-          ENV_NAME: ${{ secrets.AZURE_CONTAINERAPPS_ENV }}
+          ENV_NAME: ${{ steps.azure-names.outputs.ENV_NAME }}
           IMAGE: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
           GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
           GHCR_PAT: ${{ secrets.GHCR_PAT }}
