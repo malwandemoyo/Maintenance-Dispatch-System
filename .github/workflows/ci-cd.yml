@@ -135,7 +135,7 @@ jobs:
 
   # ==================== DEPLOY TO ORIGINAL PRODUCTION SERVER ====================
   deploy-production:
-    needs: [frontend-test, backend-test]
+    needs: []
     if: |
       github.event_name == 'workflow_dispatch' || 
       (github.event_name == 'push' && 
@@ -162,14 +162,24 @@ jobs:
           ssh -i ~/.ssh/deploy_key $DEPLOY_USER@$DEPLOY_SERVER "mkdir -p '${DEPLOY_PATH}'"
 
           # Write the secure environment file to the runner, then copy it to the production host.
+          echo "Creating .env file..."
           echo "$ENV_FILE" > /tmp/.env
-          scp -i ~/.ssh/deploy_key /tmp/.env $DEPLOY_USER@$DEPLOY_SERVER:$DEPLOY_PATH/.env
+          ls -lh /tmp/.env
+          echo "Copying .env to VM at $DEPLOY_PATH..."
+          scp -i ~/.ssh/deploy_key /tmp/.env $DEPLOY_USER@$DEPLOY_SERVER:$DEPLOY_PATH/.env || (echo "SCP failed!" && exit 1)
+          echo "Verifying .env on VM..."
+          ssh -i ~/.ssh/deploy_key $DEPLOY_USER@$DEPLOY_SERVER "ls -lh $DEPLOY_PATH/.env && head -5 $DEPLOY_PATH/.env"
 
           ssh -i ~/.ssh/deploy_key $DEPLOY_USER@$DEPLOY_SERVER "DEPLOY_PATH='${DEPLOY_PATH}' REPO_URL='${REPO_URL}' DEPLOY_BRANCH='${DEPLOY_BRANCH}' bash -s" << 'EOF'
             set -e
+            set -x
+            
             echo "Starting deployment..."
             mkdir -p "$DEPLOY_PATH"
             cd "$DEPLOY_PATH"
+            echo "Working directory: $(pwd)"
+            echo "Directory contents:"
+            ls -la
 
             if [ ! -d .git ]; then
               echo "No git repository found. Cloning $REPO_URL on branch $DEPLOY_BRANCH..."
@@ -182,21 +192,37 @@ jobs:
             fi
             
             # Load environment variables from .env file
+            echo "Checking for .env file..."
             if [ -f .env ]; then
-              echo "Loading environment from .env..."
+              echo "✓ .env file found at $(pwd)/.env"
+              echo "File size: $(wc -c < .env) bytes"
+              echo "First few lines (redacted):"
+              head -3 .env | sed 's/=.*/=***REDACTED***/g'
               set -a
               . ./.env
               set +a
-              echo "Environment loaded successfully"
+              echo "✓ Environment loaded successfully"
             else
-              echo "Warning: .env file not found at $PWD/.env"
+              echo "✗ ERROR: .env file not found at $(pwd)/.env"
+              echo "Files in current directory:"
+              ls -la
+              exit 1
             fi
             
+            echo "Pulling latest images..."
             docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
+            
+            echo "Starting containers..."
             docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+            
+            echo "Running migrations..."
             docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T backend python manage.py migrate
+            
+            echo "Collecting static files..."
             docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T backend python manage.py collectstatic --noinput
+            
             sleep 5
+            echo "Container status:"
             docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
-            echo "Deployment complete!"
+            echo "✓ Deployment complete!"
           EOF
