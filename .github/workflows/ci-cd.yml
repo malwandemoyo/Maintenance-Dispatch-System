@@ -165,10 +165,11 @@ jobs:
           echo "Creating .env file..."
           echo "$ENV_FILE" > /tmp/.env
           ls -lh /tmp/.env
-          echo "Copying .env to VM at $DEPLOY_PATH..."
+          echo "DEPLOY_PATH is set to: $DEPLOY_PATH"
+          echo "Copying .env to VM at $DEPLOY_PATH/.env..."
           scp -i ~/.ssh/deploy_key /tmp/.env $DEPLOY_USER@$DEPLOY_SERVER:$DEPLOY_PATH/.env || (echo "SCP failed!" && exit 1)
           echo "Verifying .env on VM..."
-          ssh -i ~/.ssh/deploy_key $DEPLOY_USER@$DEPLOY_SERVER "ls -lh $DEPLOY_PATH/.env && head -5 $DEPLOY_PATH/.env"
+          ssh -i ~/.ssh/deploy_key $DEPLOY_USER@$DEPLOY_SERVER "echo 'Contents of DEPLOY_PATH:' && ls -lh '$DEPLOY_PATH' | head -15"
 
           ssh -i ~/.ssh/deploy_key $DEPLOY_USER@$DEPLOY_SERVER "DEPLOY_PATH='${DEPLOY_PATH}' REPO_URL='${REPO_URL}' DEPLOY_BRANCH='${DEPLOY_BRANCH}' bash -s" << 'EOF'
             set -e
@@ -202,8 +203,15 @@ jobs:
               . ./.env
               set +a
               echo "✓ Environment loaded successfully"
+            elif [ -f .env.production ]; then
+              echo "⚠ .env not found, using .env.production as fallback"
+              cp .env.production .env
+              set -a
+              . ./.env
+              set +a
+              echo "✓ Environment loaded from .env.production"
             else
-              echo "✗ ERROR: .env file not found at $(pwd)/.env"
+              echo "✗ ERROR: Neither .env nor .env.production found at $(pwd)"
               echo "Files in current directory:"
               ls -la
               exit 1
