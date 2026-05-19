@@ -255,8 +255,9 @@ jobs:
   # ==================== DEPLOY TO ORIGINAL PRODUCTION SERVER ====================
   deploy-production:
     needs: [build-frontend, build-backend]
-    # Disabled for Azure-only deployment. Keep this block for SSH deployment if needed later.
-    if: false
+    if: |
+      github.event_name == 'push' && 
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/backend+frontend/bothend-in-sync')
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -325,10 +326,7 @@ jobs:
   # ==================== DEPLOY TO AZURE CONTAINER APPS ====================
   deploy-to-azure:
     needs: [build-frontend, build-backend, create-azure-resources]
-    # FIXED: Indented properly and set up to deploy when tracking your sync branch
-    if: |
-      github.event_name == 'push' && 
-      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/backend+frontend/bothend-in-sync')
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -384,9 +382,7 @@ jobs:
   # ==================== CREATE AZURE RESOURCES (if missing) ====================
   create-azure-resources:
     needs: [build-frontend, build-backend]
-    if: |
-      github.event_name == 'push' && 
-      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/backend+frontend/bothend-in-sync')
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -455,10 +451,39 @@ jobs:
 
           echo "RG_LOCATION=$RG_LOCATION" >> "$GITHUB_OUTPUT"
 
+      - name: Register required Azure resource providers
+        run: |
+          set -e
+          echo "Registering Microsoft.OperationalInsights provider..."
+          az provider register -n Microsoft.OperationalInsights --wait
+          echo "Registering Microsoft.App provider..."
+          az provider register -n Microsoft.App --wait
+
+      - name: Ensure Log Analytics workspace exists
+        id: log-analytics
+        env:
+          RG: ${{ secrets.AZURE_RESOURCE_GROUP }}
+        run: |
+          set -e
+          LA_WORKSPACE="maintenance-dispatch-logs"
+          if ! az monitor log-analytics workspace show --workspace-name "$LA_WORKSPACE" --resource-group "$RG" >/dev/null 2>&1; then
+            echo "Creating Log Analytics workspace: $LA_WORKSPACE"
+            az monitor log-analytics workspace create --workspace-name "$LA_WORKSPACE" --resource-group "$RG" --location "${{ steps.rg-location.outputs.RG_LOCATION }}"
+          else
+            echo "Log Analytics workspace exists"
+          fi
+          LA_WORKSPACE_ID=$(az monitor log-analytics workspace show --workspace-name "$LA_WORKSPACE" --resource-group "$RG" --query id -o tsv)
+          echo "LA_WORKSPACE_ID=$LA_WORKSPACE_ID" >> "$GITHUB_OUTPUT"
+
       - name: Ensure Container Apps environment exists
         run: |
           if ! az containerapp env show --name "${{ steps.azure-names.outputs.ENV_NAME }}" --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" >/dev/null 2>&1; then
-            az containerapp env create --name "${{ steps.azure-names.outputs.ENV_NAME }}" --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" --location "${{ steps.rg-location.outputs.RG_LOCATION }}"
+            echo "Creating Container Apps environment with Log Analytics workspace"
+            az containerapp env create \
+              --name "${{ steps.azure-names.outputs.ENV_NAME }}" \
+              --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+              --location "${{ steps.rg-location.outputs.RG_LOCATION }}" \
+              --logs-workspace-id "${{ steps.log-analytics.outputs.LA_WORKSPACE_ID }}"
           else
             echo "Container Apps environment exists"
           fi
@@ -503,23 +528,63 @@ jobs:
             echo "Frontend app exists, skipping create"
           fi
 
+      - name: Configure backend environment variables
+        env:
+          BACKEND_APP: ${{ steps.azure-names.outputs.BACKEND_APP }}
+          RG: ${{ secrets.AZURE_RESOURCE_GROUP }}
+        run: |
+          az containerapp update \
+            --name "$BACKEND_APP" \
+            --resource-group "$RG" \
+            --set-env-vars \
+              DJANGO_ENV=production \
+              DEBUG=false \
+              SECRET_KEY="${{ secrets.SECRET_KEY }}" \
+              FRONTEND_DOMAIN="${{ secrets.FRONTEND_DOMAIN }}" \
+              BACKEND_DOMAIN="${{ secrets.BACKEND_DOMAIN }}" \
+              FRONTEND_URL="${{ secrets.FRONTEND_URL }}" \
+              BACKEND_URL="${{ secrets.BACKEND_URL }}" \
+              ALLOWED_HOSTS="${{ secrets.ALLOWED_HOSTS }}" \
+              DB_ENGINE=django.db.backends.postgresql \
+              DB_NAME="${{ secrets.DB_NAME }}" \
+              DB_USER="${{ secrets.DB_USER }}" \
+              DB_PASSWORD="${{ secrets.DB_PASSWORD }}" \
+              DB_HOST="${{ secrets.DB_HOST }}" \
+              DB_PORT="${{ secrets.DB_PORT }}" \
+              TIME_ZONE=Africa/Harare \
+              AUTH_SECRET="${{ secrets.AUTH_SECRET }}" \
+              NEXT_PUBLIC_API_URL="${{ secrets.BACKEND_URL }}" \
+              PRODUCTION_API_URL="${{ secrets.BACKEND_URL }}" \
+              EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend \
+              EMAIL_HOST="${{ secrets.EMAIL_HOST }}" \
+              EMAIL_PORT="${{ secrets.EMAIL_PORT }}" \
+              EMAIL_USE_TLS=true \
+              EMAIL_HOST_USER="${{ secrets.EMAIL_HOST_USER }}" \
+              EMAIL_HOST_PASSWORD="${{ secrets.EMAIL_HOST_PASSWORD }}" \
+              DEFAULT_FROM_EMAIL="${{ secrets.DEFAULT_FROM_EMAIL }}" \
+              AUTO_CREATE_SUPERUSER=false \
+              DJANGO_LOG_LEVEL=WARNING \
+              SESSION_COOKIE_SECURE=true \
+              CSRF_COOKIE_SECURE=true \
+              PYTHONUNBUFFERED=1
+
+      - name: Configure frontend environment variables
+        env:
+          FRONTEND_APP: ${{ steps.azure-names.outputs.FRONTEND_APP }}
+          RG: ${{ secrets.AZURE_RESOURCE_GROUP }}
+        run: |
+          az containerapp update \
+            --name "$FRONTEND_APP" \
+            --resource-group "$RG" \
+            --set-env-vars \
+              NODE_ENV=production \
+              NEXT_PUBLIC_API_URL="${{ secrets.BACKEND_URL }}" \
+              FRONTEND_DOMAIN="${{ secrets.FRONTEND_DOMAIN }}" \
+              AUTH_SECRET="${{ secrets.AUTH_SECRET }}"
+
       - name: Set Azure container app names
         id: azure-config
         run: |
           echo "AZURE_BACKEND_APP_NAME=${{ secrets.AZURE_BACKEND_APP_NAME }}" >> $GITHUB_OUTPUT
           echo "AZURE_FRONTEND_APP_NAME=${{ secrets.AZURE_FRONTEND_APP_NAME }}" >> $GITHUB_OUTPUT
           echo "AZURE_RESOURCE_GROUP=${{ secrets.AZURE_RESOURCE_GROUP }}" >> $GITHUB_OUTPUT
-      # Deploy backend/frontend images (use commit SHA tags produced by build jobs)
-      - name: Deploy Backend to Azure Container Apps
-        uses: azure/container-apps-deploy-action@v1
-        with:
-          imageToDeploy: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ github.sha }}
-          containerAppName: ${{ steps.azure-config.outputs.AZURE_BACKEND_APP_NAME }}
-          resourceGroup: ${{ steps.azure-config.outputs.AZURE_RESOURCE_GROUP }}
-
-      - name: Deploy Frontend to Azure Container Apps
-        uses: azure/container-apps-deploy-action@v1
-        with:
-          imageToDeploy: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
-          containerAppName: ${{ steps.azure-config.outputs.AZURE_FRONTEND_APP_NAME }}
-          resourceGroup: ${{ steps.azure-config.outputs.AZURE_RESOURCE_GROUP }}
