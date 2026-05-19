@@ -180,11 +180,18 @@ jobs:
               git checkout "$DEPLOY_BRANCH" 2>/dev/null || git checkout -b "$DEPLOY_BRANCH" "origin/$DEPLOY_BRANCH"
               git pull origin "$DEPLOY_BRANCH"
             fi
+            
+            # Load environment variables from .env file
             if [ -f .env ]; then
+              echo "Loading environment from .env..."
               set -a
               . ./.env
               set +a
+              echo "Environment loaded successfully"
+            else
+              echo "Warning: .env file not found at $PWD/.env"
             fi
+            
             docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
             docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
             docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T backend python manage.py migrate
