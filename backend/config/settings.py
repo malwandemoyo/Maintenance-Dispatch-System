@@ -167,10 +167,15 @@ SESSION_COOKIE_SAMESITE = 'Lax' if DEBUG else 'None'  # Lax for dev (HTTP), None
 CSRF_COOKIE_SECURE = not DEBUG  # True in production, False in development
 CSRF_COOKIE_HTTPONLY = False  # Frontend needs to read CSRF token
 CSRF_COOKIE_SAMESITE = 'Lax' if DEBUG else 'None'  # Lax for dev (HTTP), None for prod (HTTPS)
-CSRF_TRUSTED_ORIGINS = [
+DEFAULT_CSRF_TRUSTED_ORIGINS = ','.join([
     'http://localhost:3000',
     'http://localhost:8000',
     'http://127.0.0.1:3000',
+])
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv('CSRF_TRUSTED_ORIGINS', DEFAULT_CSRF_TRUSTED_ORIGINS).split(',')
+    if origin.strip()
 ]
 
 # Disable automatic APPEND_SLASH redirects for POST/PUT/PATCH/DELETE requests
