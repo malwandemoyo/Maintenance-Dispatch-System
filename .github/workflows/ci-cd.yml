@@ -145,6 +145,7 @@ jobs:
           DEPLOY_SERVER: ${{ secrets.DEPLOY_SERVER }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           ENV_FILE: ${{ secrets.ENV_FILE }}
           REPO_URL: https://github.com/${{ github.repository }}.git
@@ -152,27 +153,41 @@ jobs:
 
         run: |
           set -euxo pipefail
+          SSH_PORT="${DEPLOY_PORT:-22}"
 
           mkdir -p ~/.ssh
 
-          echo "$DEPLOY_KEY" > ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KEY" | sed 's/\r$//' > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
 
           ssh-keyscan -T 10 -H github.com >> ~/.ssh/known_hosts 2>/dev/null || echo "Warning: could not scan github.com host key"
-          ssh-keyscan -T 10 -H "$DEPLOY_SERVER" >> ~/.ssh/known_hosts 2>/dev/null || echo "Warning: could not scan $DEPLOY_SERVER host key"
+          ssh-keyscan -T 10 -p "$SSH_PORT" -H "$DEPLOY_SERVER" >> ~/.ssh/known_hosts 2>/dev/null || echo "Warning: could not scan $DEPLOY_SERVER:$SSH_PORT host key"
+
+          echo "Checking TCP reachability to $DEPLOY_SERVER:$SSH_PORT..."
+          if ! timeout 10 bash -c "</dev/tcp/$DEPLOY_SERVER/$SSH_PORT" 2>/dev/null; then
+            echo "[ERROR] Cannot reach $DEPLOY_SERVER:$SSH_PORT from GitHub runner"
+            echo "Check firewall/NSG rules, SSH daemon status, and configured DEPLOY_PORT"
+            exit 1
+          fi
 
           echo "Testing SSH connection..."
           ssh \
+            -p "$SSH_PORT" \
             -o BatchMode=yes \
+            -o ConnectTimeout=10 \
             -o StrictHostKeyChecking=no \
+            -o IdentitiesOnly=yes \
             -i ~/.ssh/deploy_key \
             "$DEPLOY_USER@$DEPLOY_SERVER" \
             "echo SSH connection successful"
 
           echo "Ensuring remote deploy path exists..."
           ssh \
+            -p "$SSH_PORT" \
             -o BatchMode=yes \
+            -o ConnectTimeout=10 \
             -o StrictHostKeyChecking=no \
+            -o IdentitiesOnly=yes \
             -i ~/.ssh/deploy_key \
             "$DEPLOY_USER@$DEPLOY_SERVER" \
             "mkdir -p $DEPLOY_PATH"
@@ -180,17 +195,23 @@ jobs:
           echo "Uploading .env file..."
           echo "$ENV_FILE" > /tmp/.env
           scp \
+            -P "$SSH_PORT" \
             -o BatchMode=yes \
+            -o ConnectTimeout=10 \
             -o StrictHostKeyChecking=no \
+            -o IdentitiesOnly=yes \
             -i ~/.ssh/deploy_key \
             /tmp/.env \
             "$DEPLOY_USER@$DEPLOY_SERVER:$DEPLOY_PATH/.env"
 
           echo "Running remote deployment..."
           ssh \
+            -p "$SSH_PORT" \
             -tt \
             -o BatchMode=yes \
+            -o ConnectTimeout=10 \
             -o StrictHostKeyChecking=no \
+            -o IdentitiesOnly=yes \
             -i ~/.ssh/deploy_key \
             "$DEPLOY_USER@$DEPLOY_SERVER" \
             "DEPLOY_PATH='$DEPLOY_PATH' DEPLOY_BRANCH='$DEPLOY_BRANCH' REPO_URL='$REPO_URL' bash -s" <<'EOF'
