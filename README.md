@@ -56,6 +56,7 @@ docker compose -f docker-compose.yml -f docker-compose.test.yml up --build
 - `backend/manage.py` runs Django management commands
 - `backend/entrypoint.sh` handles startup, database readiness, migrations, and static collection
 - Environment enters auto-initialization for `development` and `test`
+- Seed demo users manually with `python manage.py seed_demo_users` from `backend/` when you need `superadmin`, `manager1`, `staff1`, `staff2`, and the resident demo accounts
 
 ### Frontend
 
