@@ -225,8 +225,16 @@ jobs:
             pwd
 
             if [ ! -d .git ]; then
-              echo "Cloning repository..."
-              git clone --branch "$DEPLOY_BRANCH" "$REPO_URL" .
+              if [ -z "$(ls -A .)" ]; then
+                echo "Directory empty — cloning repository..."
+                git clone --branch "$DEPLOY_BRANCH" "$REPO_URL" .
+              else
+                echo "Directory not a git repo and not empty — initializing git and fetching branch"
+                git init
+                git remote add origin "$REPO_URL" 2>/dev/null || git remote set-url origin "$REPO_URL"
+                git fetch --depth=1 origin "$DEPLOY_BRANCH" || git fetch origin "$DEPLOY_BRANCH"
+                git checkout -f -B "$DEPLOY_BRANCH" "origin/$DEPLOY_BRANCH" || git checkout -f -B "$DEPLOY_BRANCH"
+              fi
             else
               echo "Updating repository..."
               git fetch origin
