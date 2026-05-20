@@ -137,7 +137,7 @@ jobs:
   deploy-production:
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/backend+frontend/bothend-in-sync'))
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 180
 
     steps:
       - name: Deploy to production server
@@ -265,11 +265,22 @@ jobs:
             echo "Docker Compose version:"
             docker compose version
 
-            echo "Pulling containers..."
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml pull || { echo "[ERROR] docker compose pull failed"; exit 1; }
+            echo "System diagnostics before build:"
+            free -h || true
+            df -h || true
+            docker system df || true
+            uname -a || true
 
-            echo "Starting containers..."
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build || { echo "[ERROR] docker compose up failed"; exit 1; }
+            echo "Pulling containers (best-effort)..."
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml pull || echo "[WARN] docker compose pull failed or some images missing; continuing to build"
+
+            echo "Starting docker compose build with plain progress (BuildKit)..."
+            export DOCKER_BUILDKIT=1
+            export COMPOSE_DOCKER_CLI_BUILD=1
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml build --progress=plain || { echo "[ERROR] docker compose build failed"; exit 1; }
+
+            echo "Bringing up containers (no build)..."
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d || { echo "[ERROR] docker compose up failed"; exit 1; }
 
             echo "Waiting for backend..."
             sleep 15

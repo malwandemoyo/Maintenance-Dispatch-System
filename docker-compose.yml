@@ -27,9 +27,7 @@ services:
       dockerfile: Dockerfile
     env_file:
       - .env
-    volumes:
-      - ./backend:/app
-      - ./backend/logs:/app/logs
+    volumes: []
     ports:
       - "8000:8000"
     environment:
@@ -81,10 +79,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-      - /app/.next
+    volumes: []
 
 volumes:
   postgres_data:
